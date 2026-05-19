@@ -1,0 +1,424 @@
+import { useState } from "react";
+import { Plus, Phone, Mail, ChevronDown, X } from "lucide-react";
+import { usePipeline } from "../hooks/usePipeline";
+import { useAuth } from "../hooks/useAuth";
+import type { Lead, PipelineStage } from "../lib/database.types";
+import { Footer } from "./Footer";
+
+function fmt(n: number) {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
+
+function LeadCard({
+  lead,
+  stages,
+  onMove,
+  onClick,
+}: {
+  lead: Lead;
+  stages: PipelineStage[];
+  onMove: (leadId: string, stageId: string, oldStageId: string) => void;
+  onClick: (lead: Lead) => void;
+}) {
+  const [showMove, setShowMove] = useState(false);
+
+  return (
+    <div
+      className="rounded-xl border p-3 cursor-pointer transition-all duration-150 group"
+      style={{ backgroundColor: "#0d0d0d", borderColor: "#1a1a1a" }}
+      onClick={() => onClick(lead)}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#2a2a2a"; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.borderColor = "#1a1a1a"; }}
+    >
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <p className="text-sm font-semibold text-white leading-snug">{lead.name}</p>
+        <button
+          onClick={(e) => { e.stopPropagation(); setShowMove((p) => !p); }}
+          className="flex-shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ color: "#555" }}
+        >
+          <ChevronDown size={12} />
+        </button>
+      </div>
+
+      {lead.contact_name && (
+        <p className="text-[11px] mb-1" style={{ color: "#666" }}>{lead.contact_name}</p>
+      )}
+
+      {lead.potential_mrr && (
+        <p className="text-xs font-semibold mb-2" style={{ color: "#1FCE4A" }}>
+          {fmt(lead.potential_mrr)}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2">
+        {lead.probability > 0 && (
+          <span
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded"
+            style={{ backgroundColor: "#1a1a1a", color: "#888" }}
+          >
+            {lead.probability}%
+          </span>
+        )}
+        {lead.segment && (
+          <span className="text-[10px]" style={{ color: "#444" }}>{lead.segment}</span>
+        )}
+      </div>
+
+      {showMove && (
+        <div
+          className="mt-2 pt-2 border-t space-y-1"
+          style={{ borderColor: "#1a1a1a" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <p className="text-[9px] font-bold uppercase tracking-widest mb-1" style={{ color: "#444" }}>Mover para</p>
+          {stages.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => { onMove(lead.id, s.id, lead.stage_id); setShowMove(false); }}
+              disabled={s.id === lead.stage_id}
+              className="w-full text-left text-[11px] px-2 py-1 rounded hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ color: s.id === lead.stage_id ? "#555" : "#A3A3A3" }}
+            >
+              {s.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LeadModal({
+  lead,
+  stages,
+  onClose,
+}: {
+  lead: Lead;
+  stages: PipelineStage[];
+  onClose: () => void;
+}) {
+  const stage = stages.find((s) => s.id === lead.stage_id);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.85)" }}>
+      <div className="w-full max-w-md rounded-2xl border p-6 space-y-4" style={{ backgroundColor: "#0d0d0d", borderColor: "#1a1a1a" }}>
+        <div className="flex items-start justify-between">
+          <div>
+            <p className="text-white font-semibold">{lead.name}</p>
+            <p className="text-xs mt-0.5" style={{ color: "#1FCE4A" }}>{stage?.name ?? "—"}</p>
+          </div>
+          <button onClick={onClose} style={{ color: "#555" }}><X size={16} /></button>
+        </div>
+
+        <div className="space-y-2 text-xs">
+          {lead.contact_name && (
+            <div className="flex items-center gap-2" style={{ color: "#A3A3A3" }}>
+              <span style={{ color: "#555" }}>Contato</span>
+              {lead.contact_name}
+            </div>
+          )}
+          {lead.contact_email && (
+            <div className="flex items-center gap-2" style={{ color: "#A3A3A3" }}>
+              <Mail size={11} style={{ color: "#555" }} />
+              {lead.contact_email}
+            </div>
+          )}
+          {lead.contact_phone && (
+            <div className="flex items-center gap-2" style={{ color: "#A3A3A3" }}>
+              <Phone size={11} style={{ color: "#555" }} />
+              {lead.contact_phone}
+            </div>
+          )}
+          {lead.potential_mrr && (
+            <div className="flex items-center gap-2">
+              <span style={{ color: "#555" }}>MRR potencial</span>
+              <span className="font-semibold" style={{ color: "#1FCE4A" }}>{fmt(lead.potential_mrr)}</span>
+            </div>
+          )}
+          {lead.probability > 0 && (
+            <div className="flex items-center gap-2">
+              <span style={{ color: "#555" }}>Probabilidade</span>
+              <span style={{ color: "#A3A3A3" }}>{lead.probability}%</span>
+            </div>
+          )}
+          {lead.segment && (
+            <div className="flex items-center gap-2">
+              <span style={{ color: "#555" }}>Segmento</span>
+              <span style={{ color: "#A3A3A3" }}>{lead.segment}</span>
+            </div>
+          )}
+          {lead.source && (
+            <div className="flex items-center gap-2">
+              <span style={{ color: "#555" }}>Fonte</span>
+              <span style={{ color: "#A3A3A3" }}>{lead.source}</span>
+            </div>
+          )}
+          {lead.notes && (
+            <div className="pt-2 border-t" style={{ borderColor: "#1a1a1a" }}>
+              <p style={{ color: "#666" }}>{lead.notes}</p>
+            </div>
+          )}
+        </div>
+
+        <button onClick={onClose} className="w-full py-2 rounded-xl text-xs border" style={{ borderColor: "#262626", color: "#A3A3A3" }}>
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NewLeadModal({
+  stages,
+  onClose,
+  onSave,
+  userId,
+}: {
+  stages: PipelineStage[];
+  onClose: () => void;
+  onSave: (lead: Omit<Lead, "id" | "created_at" | "updated_at" | "deleted_at">) => void;
+  userId: string;
+}) {
+  const firstStage = stages.find((s) => !s.is_won && !s.is_lost) ?? stages[0];
+  const [form, setForm] = useState({
+    name: "",
+    contact_name: "",
+    contact_email: "",
+    contact_phone: "",
+    segment: "",
+    potential_mrr: "",
+    probability: "50",
+    source: "",
+    notes: "",
+    stage_id: firstStage?.id ?? "",
+  });
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name || !form.stage_id) return;
+    onSave({
+      name: form.name,
+      contact_name: form.contact_name || null,
+      contact_email: form.contact_email || null,
+      contact_phone: form.contact_phone || null,
+      stage_id: form.stage_id,
+      segment: form.segment || null,
+      potential_mrr: form.potential_mrr ? parseFloat(form.potential_mrr) : null,
+      probability: parseInt(form.probability),
+      source: form.source || null,
+      owner_id: null,
+      notes: form.notes || null,
+      lost_reason: null,
+      converted_to_client_id: null,
+      data_source: "manual",
+      external_id: null,
+      created_by: userId,
+    });
+  }
+
+  const field = (label: string, key: keyof typeof form, type = "text", placeholder = "") => (
+    <div>
+      <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: "#555" }}>{label}</label>
+      <input
+        type={type}
+        value={form[key]}
+        onChange={(e) => setForm((p) => ({ ...p, [key]: e.target.value }))}
+        placeholder={placeholder}
+        className="w-full bg-black border rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#333] focus:outline-none focus:border-[#1FCE4A]"
+        style={{ borderColor: "#262626" }}
+      />
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.85)" }}>
+      <div className="w-full max-w-lg rounded-2xl border p-6 space-y-4 max-h-[90vh] overflow-y-auto" style={{ backgroundColor: "#0d0d0d", borderColor: "#1a1a1a" }}>
+        <h3 className="text-white font-semibold text-sm">Novo lead</h3>
+        <form onSubmit={submit} className="space-y-3">
+          {field("Nome da empresa *", "name", "text", "ex: Empresa XYZ")}
+          <div className="grid grid-cols-2 gap-3">
+            {field("Contato", "contact_name", "text", "Nome do responsável")}
+            {field("Segmento", "segment", "text", "ex: E-commerce")}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {field("Email", "contact_email", "email", "email@empresa.com")}
+            {field("Telefone", "contact_phone", "text", "(11) 99999-9999")}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {field("MRR potencial (R$)", "potential_mrr", "number", "0")}
+            {field("Probabilidade (%)", "probability", "number", "50")}
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: "#555" }}>Etapa</label>
+            <select
+              value={form.stage_id}
+              onChange={(e) => setForm((p) => ({ ...p, stage_id: e.target.value }))}
+              className="w-full bg-black border rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-[#1FCE4A]"
+              style={{ borderColor: "#262626" }}
+              required
+            >
+              {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          {field("Fonte", "source", "text", "ex: Indicação, Instagram...")}
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-widest mb-1 block" style={{ color: "#555" }}>Observações</label>
+            <textarea
+              value={form.notes}
+              onChange={(e) => setForm((p) => ({ ...p, notes: e.target.value }))}
+              rows={2}
+              placeholder="Contexto do lead..."
+              className="w-full bg-black border rounded-lg px-3 py-2 text-xs text-white placeholder:text-[#333] focus:outline-none focus:border-[#1FCE4A] resize-none"
+              style={{ borderColor: "#262626" }}
+            />
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl text-xs border" style={{ borderColor: "#262626", color: "#A3A3A3" }}>
+              Cancelar
+            </button>
+            <button type="submit" className="flex-1 py-2 rounded-xl text-xs font-semibold" style={{ backgroundColor: "#1FCE4A", color: "#000" }}>
+              Salvar lead
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+export function PipelineView() {
+  const { leads, stages, loading, createLead, moveLeadToStage, totalPotentialMrr, weightedMrr } = usePipeline();
+  const { profile } = useAuth();
+  const [showNew, setShowNew] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+
+  const activeLeads = leads.filter((l) => !l.converted_to_client_id);
+  const activeStages = stages.filter((s) => !s.is_lost);
+
+  async function handleMove(leadId: string, stageId: string, oldStageId: string) {
+    if (!profile?.id) return;
+    await moveLeadToStage(leadId, stageId, oldStageId, profile.id);
+  }
+
+  async function handleCreateLead(input: Omit<Lead, "id" | "created_at" | "updated_at" | "deleted_at">) {
+    await createLead(input);
+    setShowNew(false);
+  }
+
+  return (
+    <div className="flex flex-col min-h-0">
+      <div className="max-w-screen-xl mx-auto w-full px-6 py-8 space-y-6">
+
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-[10px] font-bold tracking-widest uppercase mb-0.5" style={{ color: "#1FCE4A" }}>
+              Pipeline comercial
+            </p>
+            <h2 className="text-white font-bold text-lg leading-tight">Gestão de leads</h2>
+          </div>
+          <button
+            onClick={() => setShowNew(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg flex-shrink-0"
+            style={{ backgroundColor: "#1FCE4A", color: "#000" }}
+          >
+            <Plus size={13} />
+            Novo lead
+          </button>
+        </div>
+
+        {/* KPI strip */}
+        <div className="flex gap-6 text-xs">
+          <div>
+            <span style={{ color: "#555" }}>Leads ativos</span>
+            <span className="ml-2 font-bold text-white">{activeLeads.length}</span>
+          </div>
+          <div>
+            <span style={{ color: "#555" }}>MRR potencial</span>
+            <span className="ml-2 font-bold" style={{ color: "#1FCE4A" }}>{fmt(totalPotentialMrr)}</span>
+          </div>
+          <div>
+            <span style={{ color: "#555" }}>MRR ponderado</span>
+            <span className="ml-2 font-bold text-white">{fmt(weightedMrr)}</span>
+          </div>
+        </div>
+
+        {/* Kanban */}
+        {loading ? (
+          <p className="text-sm" style={{ color: "#555" }}>Carregando...</p>
+        ) : (
+          <div className="flex gap-4 overflow-x-auto pb-4">
+            {activeStages.map((stage) => {
+              const stageLeads = activeLeads.filter((l) => l.stage_id === stage.id);
+              const stageMrr = stageLeads.reduce((s, l) => s + (l.potential_mrr ?? 0), 0);
+              return (
+                <div key={stage.id} className="flex-shrink-0 w-64">
+                  {/* Column header */}
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="w-2 h-2 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: stage.color }}
+                      />
+                      <span className="text-xs font-semibold text-white">{stage.name}</span>
+                      <span
+                        className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                        style={{ backgroundColor: "#1a1a1a", color: "#666" }}
+                      >
+                        {stageLeads.length}
+                      </span>
+                    </div>
+                    {stageMrr > 0 && (
+                      <span className="text-[10px]" style={{ color: "#1FCE4A" }}>{fmt(stageMrr)}</span>
+                    )}
+                  </div>
+
+                  {/* Cards */}
+                  <div className="space-y-2">
+                    {stageLeads.map((lead) => (
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        stages={stages}
+                        onMove={handleMove}
+                        onClick={setSelectedLead}
+                      />
+                    ))}
+                    {stageLeads.length === 0 && (
+                      <div
+                        className="rounded-xl border border-dashed p-4 text-center"
+                        style={{ borderColor: "#1a1a1a" }}
+                      >
+                        <p className="text-[11px]" style={{ color: "#333" }}>Sem leads</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {showNew && profile && (
+        <NewLeadModal
+          stages={stages}
+          onClose={() => setShowNew(false)}
+          onSave={handleCreateLead}
+          userId={profile.id}
+        />
+      )}
+
+      {selectedLead && (
+        <LeadModal
+          lead={selectedLead}
+          stages={stages}
+          onClose={() => setSelectedLead(null)}
+        />
+      )}
+
+      <Footer />
+    </div>
+  );
+}
