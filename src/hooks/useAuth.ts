@@ -11,6 +11,18 @@ interface AuthState {
   isLoading: boolean
 }
 
+async function fetchProfile(userId: string): Promise<Profile | null> {
+  try {
+    const { data } = await Promise.race([
+      supabase.from('profiles').select('*').eq('id', userId).single(),
+      new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 5000)),
+    ])
+    return data
+  } catch {
+    return null
+  }
+}
+
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -21,17 +33,18 @@ export function useAuth() {
   })
 
   useEffect(() => {
-    // Timeout de segurança: se Supabase não responder em 8s, para de carregar
+    // Timeout global: nunca fica travado
     const timeout = setTimeout(() => {
       setState((s) => s.isLoading ? { ...s, isLoading: false } : s)
-    }, 8000)
+    }, 6000)
 
-    // Pega sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout)
       if (session) {
+        // Autentica imediatamente, busca perfil em paralelo sem bloquear
+        setState({ user: session.user, session, profile: null, isAuthenticated: true, isLoading: false })
         fetchProfile(session.user.id).then((profile) => {
-          setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
+          if (profile) setState((s) => ({ ...s, profile }))
         })
       } else {
         setState((s) => ({ ...s, isLoading: false }))
@@ -41,11 +54,13 @@ export function useAuth() {
       setState((s) => ({ ...s, isLoading: false }))
     })
 
-    // Escuta mudanças de auth
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      clearTimeout(timeout)
       if (session) {
-        const profile = await fetchProfile(session.user.id)
-        setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
+        setState({ user: session.user, session, profile: null, isAuthenticated: true, isLoading: false })
+        fetchProfile(session.user.id).then((profile) => {
+          if (profile) setState((s) => ({ ...s, profile }))
+        })
       } else {
         setState({ user: null, session: null, profile: null, isAuthenticated: false, isLoading: false })
       }
@@ -53,11 +68,6 @@ export function useAuth() {
 
     return () => { subscription.unsubscribe(); clearTimeout(timeout) }
   }, [])
-
-  async function fetchProfile(userId: string): Promise<Profile | null> {
-    const { data } = await supabase.from('profiles').select('*').eq('id', userId).single()
-    return data
-  }
 
   async function login(email: string, password: string): Promise<{ error?: string }> {
     const { error } = await supabase.auth.signInWithPassword({ email, password })
