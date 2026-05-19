@@ -15,7 +15,7 @@ import { ProfileView } from "./components/ProfileView";
 import { Loader2 } from "lucide-react";
 
 function App() {
-  const { profile, isAuthenticated, isLoading, logout } = useAuth();
+  const { user, profile, isAuthenticated, isLoading, logout } = useAuth();
   const [view, setView] = useState<AppView>("home");
 
   if (isLoading) {
@@ -43,7 +43,7 @@ function App() {
         {view === "pipeline"   && <PipelineView />}
         {view === "playbook"   && <PlaybookView />}
         {view === "central"    && <CentralView />}
-        {view === "profile"    && <ProfileView profile={profile} />}
+        {view === "profile"    && <ProfileView profile={profile} userEmail={user?.email ?? ""} />}
       </main>
     </div>
   );

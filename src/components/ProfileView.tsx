@@ -11,14 +11,15 @@ const ROLE_LABELS: Record<string, string> = {
   gp: "Gestor de Projetos",
 };
 
-interface ProfileViewProps { profile: Profile | null }
+interface ProfileViewProps { profile: Profile | null; userEmail: string }
 
 const inputCls = "w-full bg-black border rounded-lg px-3 py-2.5 text-sm text-white placeholder:text-[#333] focus:outline-none transition-colors";
 const inputStyle = { borderColor: "#262626" };
 const inputFocus = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "#1FCE4A44");
 const inputBlur  = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "#262626");
 
-export function ProfileView({ profile }: ProfileViewProps) {
+export function ProfileView({ profile, userEmail }: ProfileViewProps) {
+  const email = profile?.email ?? userEmail;
   // Sync displayName when profile loads asynchronously
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -36,7 +37,8 @@ export function ProfileView({ profile }: ProfileViewProps) {
   }, [profile?.display_name]);
 
   async function handleSaveName() {
-    if (!profile || !displayName.trim()) return;
+    if (!displayName.trim()) return;
+    if (!profile) return; // sem tabela profiles ainda
     setSaving(true);
     const { error } = await supabase
       .from("profiles")
@@ -65,14 +67,6 @@ export function ProfileView({ profile }: ProfileViewProps) {
     setTimeout(() => setPwSuccess(false), 3000);
   }
 
-  if (!profile) {
-    return (
-      <div className="flex items-center justify-center flex-1 py-20">
-        <p className="text-sm" style={{ color: "#555" }}>Carregando perfil...</p>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col">
       <div className="max-w-lg mx-auto w-full px-6 py-8 space-y-6">
@@ -94,20 +88,22 @@ export function ProfileView({ profile }: ProfileViewProps) {
             className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-lg font-bold"
             style={{ backgroundColor: "#0d1f14", color: "#1FCE4A", border: "1px solid #1FCE4A33" }}
           >
-            {(profile.display_name || profile.email).charAt(0).toUpperCase()}
+            {(displayName || email).charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0">
-            <p className="text-white font-semibold text-sm truncate">{profile.display_name || "—"}</p>
-            <p className="text-xs truncate" style={{ color: "#555" }}>{profile.email}</p>
-            <div className="flex items-center gap-1 mt-1">
-              {profile.role === "admin" && <ShieldCheck size={11} style={{ color: "#1FCE4A" }} />}
-              <span
-                className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: "#0d1f14", color: "#1FCE4A" }}
-              >
-                {ROLE_LABELS[profile.role] ?? profile.role}
-              </span>
-            </div>
+            <p className="text-white font-semibold text-sm truncate">{displayName || "—"}</p>
+            <p className="text-xs truncate" style={{ color: "#555" }}>{email}</p>
+            {profile && (
+              <div className="flex items-center gap-1 mt-1">
+                {profile.role === "admin" && <ShieldCheck size={11} style={{ color: "#1FCE4A" }} />}
+                <span
+                  className="text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: "#0d1f14", color: "#1FCE4A" }}
+                >
+                  {ROLE_LABELS[profile.role] ?? profile.role}
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -123,7 +119,7 @@ export function ProfileView({ profile }: ProfileViewProps) {
               Email
             </label>
             <p className="text-sm px-3 py-2.5 rounded-lg" style={{ backgroundColor: "#060606", color: "#444", border: "1px solid #1a1a1a" }}>
-              {profile.email}
+              {email}
             </p>
           </div>
 
@@ -145,7 +141,7 @@ export function ProfileView({ profile }: ProfileViewProps) {
 
           <button
             onClick={handleSaveName}
-            disabled={saving || !displayName.trim() || displayName.trim() === profile.display_name}
+            disabled={saving || !displayName.trim() || displayName.trim() === (profile?.display_name ?? "")}
             className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
             style={{
               backgroundColor: savedName ? "#0d1f14" : "#1FCE4A",
