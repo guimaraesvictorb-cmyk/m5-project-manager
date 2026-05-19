@@ -21,8 +21,14 @@ export function useAuth() {
   })
 
   useEffect(() => {
+    // Timeout de segurança: se Supabase não responder em 8s, para de carregar
+    const timeout = setTimeout(() => {
+      setState((s) => s.isLoading ? { ...s, isLoading: false } : s)
+    }, 8000)
+
     // Pega sessão atual
     supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(timeout)
       if (session) {
         fetchProfile(session.user.id).then((profile) => {
           setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
@@ -30,6 +36,9 @@ export function useAuth() {
       } else {
         setState((s) => ({ ...s, isLoading: false }))
       }
+    }).catch(() => {
+      clearTimeout(timeout)
+      setState((s) => ({ ...s, isLoading: false }))
     })
 
     // Escuta mudanças de auth
@@ -42,7 +51,7 @@ export function useAuth() {
       }
     })
 
-    return () => subscription.unsubscribe()
+    return () => { subscription.unsubscribe(); clearTimeout(timeout) }
   }, [])
 
   async function fetchProfile(userId: string): Promise<Profile | null> {
