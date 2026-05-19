@@ -63,7 +63,7 @@ export function AppNav({ active, onChange, profile, onLogout }: AppNavProps) {
   return (
     <aside
       className="flex flex-col flex-shrink-0 h-screen overflow-y-auto"
-      style={{ width: 220, backgroundColor: "#050505", borderRight: "1px solid #111" }}
+      style={{ width: 260, backgroundColor: "#050505", borderRight: "1px solid #111" }}
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 py-5 flex-shrink-0" style={{ borderBottom: "1px solid #111" }}>

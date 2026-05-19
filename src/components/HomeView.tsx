@@ -238,7 +238,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
             "authorization": `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: "llama-3.1-70b-versatile",
+            model: "llama-3.3-70b-versatile",
             max_tokens: 1024,
             stream: true,
             messages: [
@@ -328,7 +328,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
             M5 AI
           </span>
           <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: "#0d1f14", color: "#555", border: "1px solid #1a1a1a" }}>
-            llama 3.1 · groq
+            llama 3.3 · groq
           </span>
         </div>
 
