@@ -1,7 +1,20 @@
-import { ClientesSection } from "./ClientesSection";
-import { Footer } from "./Footer";
+import { useState } from "react"
+import { ClientesSection } from "./ClientesSection"
+import { ClientDetailView } from "./ClientDetailView"
+import { Footer } from "./Footer"
+import type { Client } from "../lib/database.types"
 
 export function ClientesView() {
+  const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+
+  if (selectedClient) {
+    return (
+      <div className="flex flex-col min-h-0 h-full">
+        <ClientDetailView client={selectedClient} onBack={() => setSelectedClient(null)} />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col min-h-0">
       <div className="max-w-screen-xl mx-auto w-full px-6 py-8">
@@ -11,9 +24,9 @@ export function ClientesView() {
           </p>
           <h2 className="text-white font-bold text-lg leading-tight">Carteira de clientes</h2>
         </div>
-        <ClientesSection compact={false} />
+        <ClientesSection compact={false} onSelectClient={setSelectedClient} />
       </div>
       <Footer />
     </div>
-  );
+  )
 }

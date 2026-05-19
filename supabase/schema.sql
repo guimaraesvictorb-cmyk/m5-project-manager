@@ -439,3 +439,35 @@ create trigger set_updated_at before update on tasks for each row execute functi
 create trigger set_updated_at before update on comments for each row execute function set_updated_at();
 create trigger set_updated_at before update on financial_records for each row execute function set_updated_at();
 create trigger set_updated_at before update on leads for each row execute function set_updated_at();
+
+-- ─────────────────────────────────────────────
+-- CLIENT KNOWLEDGE BASE
+-- ─────────────────────────────────────────────
+create table if not exists client_knowledge (
+  id          uuid primary key default gen_random_uuid(),
+  client_id   uuid not null references clients(id) on delete cascade,
+  title       text not null,
+  content     text not null,
+  source      text not null check (source in ('manual', 'ai_suggested', 'web')) default 'manual',
+  validated   boolean not null default false,
+  created_by  uuid references profiles(id) on delete set null,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+alter table client_knowledge enable row level security;
+
+-- Admin/coord: acesso total
+create policy "knowledge: admin/coord all" on client_knowledge for all
+  using (exists (select 1 from profiles p where p.id = auth.uid() and p.role in ('admin', 'coordenador')));
+
+-- GT/GP: lê apenas conhecimento validado dos seus clientes
+create policy "knowledge: gt/gp read validated" on client_knowledge for select
+  using (
+    validated = true and
+    client_id in (
+      select client_id from client_assignments where user_id = auth.uid() and is_active = true
+    )
+  );
+
+create trigger set_updated_at before update on client_knowledge for each row execute function set_updated_at();

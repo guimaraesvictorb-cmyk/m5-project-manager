@@ -28,15 +28,16 @@ function avatarColor(id: string) {
   return AVATAR_COLORS[n % AVATAR_COLORS.length];
 }
 
-function ClientCard({ client, onHealthChange }: { client: Client; onHealthChange: (id: string, flag: Client["health_flag"]) => void }) {
+function ClientCard({ client, onHealthChange, onSelect }: { client: Client; onHealthChange: (id: string, flag: Client["health_flag"]) => void; onSelect: (client: Client) => void }) {
   const flag = FLAG_META[client.health_flag];
   const statusMeta = STATUS_META[client.status];
   const [changingFlag, setChangingFlag] = useState(false);
 
   return (
     <div
-      className="rounded-xl p-4 border border-[#1a1a1a] transition-all duration-150 flex flex-col gap-3"
+      className="rounded-xl p-4 border border-[#1a1a1a] transition-all duration-150 flex flex-col gap-3 cursor-pointer"
       style={{ backgroundColor: "#0a0a0a" }}
+      onClick={() => onSelect(client)}
       onMouseEnter={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "#1FCE4A33")}
       onMouseLeave={(e) => ((e.currentTarget as HTMLDivElement).style.borderColor = "#1a1a1a")}
     >
@@ -54,7 +55,7 @@ function ClientCard({ client, onHealthChange }: { client: Client; onHealthChange
             {/* Health flag — clicável */}
             <div className="relative">
               <button
-                onClick={() => setChangingFlag((v) => !v)}
+                onClick={(e) => { e.stopPropagation(); setChangingFlag((v) => !v); }}
                 className="flex-shrink-0 text-[9px] font-bold tracking-widest px-1.5 py-0.5 rounded uppercase"
                 style={{ backgroundColor: flag.bg, color: flag.color, border: `1px solid ${flag.color}33` }}
               >
@@ -68,7 +69,7 @@ function ClientCard({ client, onHealthChange }: { client: Client; onHealthChange
                   {(["green", "yellow", "red"] as const).map((f) => (
                     <button
                       key={f}
-                      onClick={() => { onHealthChange(client.id, f); setChangingFlag(false); }}
+                      onClick={(e) => { e.stopPropagation(); onHealthChange(client.id, f); setChangingFlag(false); }}
                       className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider text-left"
                       style={{ color: FLAG_META[f].color }}
                     >
@@ -111,6 +112,7 @@ function ClientCard({ client, onHealthChange }: { client: Client; onHealthChange
           href={client.website}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
           className="flex items-center gap-1 text-[11px] transition-colors duration-150 mt-auto"
           style={{ color: "#444" }}
           onMouseEnter={(e) => ((e.currentTarget as HTMLAnchorElement).style.color = "#1FCE4A")}
@@ -207,9 +209,10 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
 
 interface ClientesSectionProps {
   compact?: boolean;
+  onSelectClient?: (client: Client) => void;
 }
 
-export function ClientesSection({ compact = false }: ClientesSectionProps) {
+export function ClientesSection({ compact = false, onSelectClient }: ClientesSectionProps) {
   const { clients, loading, createClient, updateHealthFlag } = useClients();
   const { profile } = useAuth();
   const [search, setSearch] = useState("");
@@ -315,7 +318,7 @@ export function ClientesSection({ compact = false }: ClientesSectionProps) {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {filtered.map((client) => (
-            <ClientCard key={client.id} client={client} onHealthChange={updateHealthFlag} />
+            <ClientCard key={client.id} client={client} onHealthChange={updateHealthFlag} onSelect={(c) => onSelectClient?.(c)} />
           ))}
         </div>
       )}
