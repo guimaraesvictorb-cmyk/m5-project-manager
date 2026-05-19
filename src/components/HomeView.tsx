@@ -3,7 +3,8 @@ import { Send, Sparkles, Settings, X, Trash2, ChevronRight } from "lucide-react"
 import type { Profile } from "../lib/database.types";
 import type { AppView } from "./AppNav";
 
-const API_KEY_STORAGE = "m5os_anthropic_key";
+const API_KEY_STORAGE = "m5os_groq_key";
+const GROQ_API_KEY_ENV = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
 
 const SYSTEM_PROMPT = `Você é o M5 AI — assistente interno da M5 Marketing, agência digital brasileira especializada em tráfego pago, gestão de redes sociais e performance.
 
@@ -69,9 +70,10 @@ const QUICK_ACTIONS = [
 ];
 
 const SHORTCUTS = [
+  { label: "Tarefas",  view: "tarefas"  as AppView },
+  { label: "Clientes", view: "clientes" as AppView },
+  { label: "Pipeline", view: "pipeline" as AppView },
   { label: "Playbook", view: "playbook" as AppView },
-  { label: "Operação", view: "operacao" as AppView },
-  { label: "Central", view: "central" as AppView },
 ];
 
 interface Message {
@@ -177,7 +179,7 @@ interface HomeViewProps {
 
 export function HomeView({ profile, onNavigate }: HomeViewProps) {
   const firstName = profile?.display_name?.split(" ")[0] ?? "time";
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(API_KEY_STORAGE) ?? "");
+  const [apiKey, setApiKey] = useState(() => GROQ_API_KEY_ENV || localStorage.getItem(API_KEY_STORAGE) || "");
   const [showSettings, setShowSettings] = useState(false);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [messages, setMessages] = useState<Message[]>([
@@ -228,20 +230,21 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
       abortRef.current = ctrl;
 
       try {
-        const res = await fetch("/api/anthropic/v1/messages", {
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
           method: "POST",
           signal: ctrl.signal,
           headers: {
             "content-type": "application/json",
-            "x-api-key": apiKey,
-            "anthropic-version": "2023-06-01",
+            "authorization": `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: "claude-haiku-4-5-20251001",
+            model: "llama-3.1-70b-versatile",
             max_tokens: 1024,
-            system: SYSTEM_PROMPT,
             stream: true,
-            messages: history.map((m) => ({ role: m.role, content: m.content })),
+            messages: [
+              { role: "system", content: SYSTEM_PROMPT },
+              ...history.map((m) => ({ role: m.role, content: m.content })),
+            ],
           }),
         });
 
@@ -267,10 +270,11 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
             if (data === "[DONE]") continue;
             try {
               const json = JSON.parse(data);
-              if (json.type === "content_block_delta" && json.delta?.type === "text_delta") {
+              const delta = json.choices?.[0]?.delta?.content;
+              if (delta) {
                 setMessages((prev) =>
                   prev.map((m) =>
-                    m.id === assistantId ? { ...m, content: m.content + json.delta.text } : m
+                    m.id === assistantId ? { ...m, content: m.content + delta } : m
                   )
                 );
               }
@@ -283,8 +287,8 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
         if ((err as Error).name === "AbortError") return;
         const errMsg =
           !apiKey
-            ? "Nenhuma API key configurada. Clique em ⚙ para adicionar sua chave da Anthropic."
-            : `Erro ao conectar com a IA: ${(err as Error).message}\n\nVerifique se sua API key está correta nas configurações.`;
+            ? "Nenhuma API key configurada. Clique em ⚙ para adicionar sua chave gratuita do Groq (console.groq.com)."
+            : `Erro ao conectar com a IA: ${(err as Error).message}\n\nVerifique se sua chave Groq está correta nas configurações.`;
         setMessages((prev) =>
           prev.map((m) => (m.id === assistantId ? { ...m, content: errMsg } : m))
         );
@@ -324,7 +328,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
             M5 AI
           </span>
           <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: "#0d1f14", color: "#555", border: "1px solid #1a1a1a" }}>
-            claude haiku
+            llama 3.1 · groq
           </span>
         </div>
 
@@ -386,7 +390,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
             style={{ backgroundColor: "#1a0a0a", border: "1px solid #DC262633" }}
           >
             <p className="text-xs" style={{ color: "#ef4444" }}>
-              Configure sua API key da Anthropic para ativar o assistente com IA real.
+              Configure sua chave gratuita do Groq para ativar o assistente. Crie em console.groq.com (sem cartão).
             </p>
             <button
               onClick={() => { setKeyDraft(""); setShowSettings(true); }}
@@ -515,14 +519,14 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
 
             <div className="space-y-2">
               <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#555" }}>
-                Anthropic API Key
+                Groq API Key (gratuito)
               </label>
               <input
                 type="password"
                 value={keyDraft}
                 onChange={(e) => setKeyDraft(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && saveApiKey()}
-                placeholder="sk-ant-..."
+                placeholder="gsk_..."
                 autoFocus
                 className="w-full rounded-xl px-4 py-3 text-sm focus:outline-none transition-colors"
                 style={{
@@ -534,7 +538,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
                 onBlur={(e) => (e.currentTarget.style.borderColor = "#1e1e1e")}
               />
               <p className="text-[10px]" style={{ color: "#333" }}>
-                Obtenha sua key em console.anthropic.com
+                Gratuito em console.groq.com — sem cartão de crédito
               </p>
             </div>
 
