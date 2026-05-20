@@ -2,8 +2,8 @@ import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import type { Profile } from "../lib/database.types";
 import {
-  ShieldCheck, Save, KeyRound, User, CheckCircle2,
-  AlertCircle, Monitor, Smartphone, Globe, LogOut
+  ShieldCheck, Save, KeyRound, CheckCircle2,
+  AlertCircle, Monitor, Globe, LogOut
 } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = {

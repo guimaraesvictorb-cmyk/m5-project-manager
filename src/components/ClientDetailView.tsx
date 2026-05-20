@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react"
 import {
   ArrowLeft, Globe, User, Phone, Mail, DollarSign, Tag,
   Plus, Check, Trash2, Brain, Send, Loader2, Sparkles,
-  BookOpen, X, ChevronDown
+  BookOpen, X
 } from "lucide-react"
 import type { Client } from "../lib/database.types"
 import { useClientKnowledge, type KnowledgeEntry } from "../hooks/useClientKnowledge"
@@ -36,7 +36,7 @@ interface ChatMessage { role: "user" | "assistant"; content: string }
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-function Field({ label, value }: { label: string; value: React.ReactNode }) {
+function Field({ label, value }: { label: React.ReactNode; value: React.ReactNode }) {
   if (!value) return null
   return (
     <div className="grid grid-cols-[160px_1fr] items-start gap-4 py-3" style={{ borderBottom: "1px solid #111" }}>
