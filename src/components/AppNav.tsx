@@ -1,7 +1,7 @@
 import {
   Sparkles, LayoutDashboard, CheckSquare, Users, DollarSign,
   TrendingUp, BookOpen, Building2, UserCircle, LogOut, ShieldCheck,
-  ChevronRight, Settings, Link2, PenTool, FileText, Bot, MessageSquare, Plug,
+  ChevronRight, Settings, Link2, PenTool, FileText, Bot, MessageSquare, Plug, UserPlus,
 } from "lucide-react";
 import type { Profile } from "../lib/database.types";
 
@@ -14,6 +14,7 @@ export type AppView =
   | "rastreamento"
   | "super-agente" | "copy-ia" | "relatorios"
   | "whatsapp" | "integracoes"
+  | "leads-capturados"
   | "profile" | "settings";
 
 interface NavItem { view: AppView; label: string; icon: React.ReactNode }
@@ -41,7 +42,8 @@ const NAV: NavGroup[] = [
   {
     label: "Comercial",
     items: [
-      { view: "pipeline", label: "Oportunidades", icon: <TrendingUp size={15} /> },
+      { view: "pipeline",         label: "Oportunidades",   icon: <TrendingUp size={15} /> },
+      { view: "leads-capturados", label: "Leads Capturados", icon: <UserPlus size={15} /> },
     ],
   },
   {
