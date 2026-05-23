@@ -98,6 +98,7 @@ function EntryForm({ platform, clientId, existing, onSave, onCancel }: {
       conversoes: vals.conversoes ? parseFloat(vals.conversoes) : null,
       custo_por_conversao: vals.custo_por_conversao ? parseFloat(vals.custo_por_conversao) : null,
       roas: vals.roas ? parseFloat(vals.roas) : null,
+      synced_from_api: false,
       created_by: profile.id,
     }
     await onSave(input)

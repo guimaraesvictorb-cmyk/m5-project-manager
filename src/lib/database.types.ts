@@ -242,6 +242,55 @@ export interface LeadActivity {
   created_at: string
 }
 
+export interface AdsMetric {
+  id: string
+  client_id: string
+  platform: 'meta' | 'google'
+  period: string
+  investimento: number | null
+  impressoes: number | null
+  alcance: number | null
+  cliques: number | null
+  ctr: number | null
+  resultados: number | null
+  custo_por_resultado: number | null
+  cpc: number | null
+  conversoes: number | null
+  custo_por_conversao: number | null
+  roas: number | null
+  synced_from_api: boolean
+  created_by: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ShareToken {
+  id: string
+  client_id: string
+  token: string
+  label: string | null
+  expires_at: string | null
+  created_by: string | null
+  created_at: string
+}
+
+export interface UTMCapture {
+  id: string
+  lead_id: string | null
+  name: string | null
+  email: string | null
+  phone: string | null
+  utm_source: string | null
+  utm_medium: string | null
+  utm_campaign: string | null
+  utm_content: string | null
+  utm_term: string | null
+  landing_page: string | null
+  ip_hash: string | null
+  user_agent: string | null
+  captured_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -249,6 +298,9 @@ export type Database = {
       clients: { Row: Client; Insert: Omit<Client, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Client> }
       client_assignments: { Row: ClientAssignment; Insert: Omit<ClientAssignment, 'id'>; Update: Partial<ClientAssignment> }
       client_checklist: { Row: ClientChecklist; Insert: Omit<ClientChecklist, 'id' | 'created_at' | 'updated_at'>; Update: Partial<ClientChecklist> }
+      client_ads_metrics: { Row: AdsMetric; Insert: Omit<AdsMetric, 'id' | 'created_at' | 'updated_at'>; Update: Partial<AdsMetric> }
+      client_share_tokens: { Row: ShareToken; Insert: Omit<ShareToken, 'id' | 'created_at'>; Update: Partial<ShareToken> }
+      utm_captures: { Row: UTMCapture; Insert: Omit<UTMCapture, 'id' | 'captured_at'>; Update: Partial<UTMCapture> }
       quarters: { Row: Quarter; Insert: Omit<Quarter, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Quarter> }
       playbooks: { Row: Playbook; Insert: Omit<Playbook, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Playbook> }
       playbook_steps: { Row: PlaybookStep; Insert: Omit<PlaybookStep, 'id' | 'created_at' | 'updated_at'>; Update: Partial<PlaybookStep> }

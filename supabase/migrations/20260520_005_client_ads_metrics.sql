@@ -23,3 +23,5 @@ CREATE TABLE IF NOT EXISTS client_ads_metrics (
 ALTER TABLE client_ads_metrics ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "members manage ads metrics" ON client_ads_metrics;
 CREATE POLICY "members manage ads metrics" ON client_ads_metrics FOR ALL USING (auth.uid() IS NOT NULL);
+
+ALTER TABLE client_ads_metrics ADD COLUMN IF NOT EXISTS synced_from_api boolean NOT NULL DEFAULT false;

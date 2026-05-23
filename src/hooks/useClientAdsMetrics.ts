@@ -1,27 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import type { AdsMetric } from '../lib/database.types'
 
-export interface AdsMetric {
-  id: string
-  client_id: string
-  platform: 'meta' | 'google'
-  period: string
-  investimento: number | null
-  impressoes: number | null
-  alcance: number | null
-  cliques: number | null
-  ctr: number | null
-  resultados: number | null
-  custo_por_resultado: number | null
-  cpc: number | null
-  conversoes: number | null
-  custo_por_conversao: number | null
-  roas: number | null
-  created_by: string
-  created_at: string
-  updated_at: string
-}
-
+export type { AdsMetric }
 export type AdsMetricInput = Omit<AdsMetric, 'id' | 'created_at' | 'updated_at'>
 
 export function useClientAdsMetrics(clientId: string) {

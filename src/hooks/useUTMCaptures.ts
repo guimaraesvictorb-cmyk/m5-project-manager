@@ -1,20 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
+import type { UTMCapture } from "../lib/database.types";
 
-export interface UTMCapture {
-  id: string;
-  lead_id: string | null;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  utm_source: string | null;
-  utm_medium: string | null;
-  utm_campaign: string | null;
-  utm_content: string | null;
-  utm_term: string | null;
-  landing_page: string | null;
-  captured_at: string;
-}
+export type { UTMCapture };
 
 export function useUTMCaptures() {
   const [captures, setCaptures] = useState<UTMCapture[]>([]);

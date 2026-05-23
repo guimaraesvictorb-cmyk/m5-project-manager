@@ -1,14 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
+import type { ShareToken } from "../lib/database.types";
 
-export interface ShareToken {
-  id: string;
-  client_id: string;
-  token: string;
-  label: string | null;
-  expires_at: string | null;
-  created_at: string;
-}
+export type { ShareToken };
 
 export function useShareTokens(clientId: string) {
   const [tokens, setTokens] = useState<ShareToken[]>([]);
