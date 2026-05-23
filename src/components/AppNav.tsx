@@ -1,7 +1,7 @@
 import {
   Sparkles, LayoutDashboard, CheckSquare, Users, DollarSign,
   TrendingUp, BookOpen, Building2, UserCircle, LogOut, ShieldCheck,
-  ChevronRight, Settings, Link2,
+  ChevronRight, Settings, Link2, PenTool, FileText, Bot,
 } from "lucide-react";
 import type { Profile } from "../lib/database.types";
 
@@ -12,6 +12,7 @@ export type AppView =
   | "pipeline"
   | "processos" | "central"
   | "rastreamento"
+  | "super-agente" | "copy-ia" | "relatorios"
   | "profile" | "settings";
 
 interface NavItem { view: AppView; label: string; icon: React.ReactNode }
@@ -47,6 +48,14 @@ const NAV: NavGroup[] = [
       { view: "processos",    label: "Processos",    icon: <BookOpen size={15} /> },
       { view: "central",      label: "Central",      icon: <Building2 size={15} /> },
       { view: "rastreamento", label: "Rastreamento", icon: <Link2 size={15} /> },
+    ],
+  },
+  {
+    label: "Ferramentas IA",
+    items: [
+      { view: "super-agente", label: "Super Agente", icon: <Bot size={15} /> },
+      { view: "copy-ia",      label: "Copy IA",      icon: <PenTool size={15} /> },
+      { view: "relatorios",   label: "Relatórios",   icon: <FileText size={15} /> },
     ],
   },
 ];

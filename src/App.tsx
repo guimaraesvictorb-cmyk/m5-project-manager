@@ -14,6 +14,9 @@ import { CentralView } from "./components/central/CentralView";
 import { ProfileView } from "./components/ProfileView";
 import { SettingsView } from "./components/SettingsView";
 import { RastreamentoView } from "./components/RastreamentoView";
+import { SuperAgenteView } from "./components/SuperAgenteView";
+import { CopyIAView } from "./components/CopyIAView";
+import { RelatoriosView } from "./components/RelatoriosView";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Loader2 } from "lucide-react";
 
@@ -48,6 +51,9 @@ function App() {
           {view === "processos"     && <PlaybookView />}
           {view === "central"       && <CentralView />}
           {view === "rastreamento"  && <RastreamentoView />}
+          {view === "super-agente" && <SuperAgenteView />}
+          {view === "copy-ia"      && <CopyIAView />}
+          {view === "relatorios"   && <RelatoriosView />}
           {view === "profile"    && <ProfileView profile={profile} userEmail={user?.email ?? ""} />}
           {view === "settings"   && <SettingsView profile={profile} />}
         </main>
