@@ -3,8 +3,7 @@ import { Send, Sparkles, Settings, X, Trash2, ChevronRight } from "lucide-react"
 import type { Profile } from "../lib/database.types";
 import type { AppView } from "./AppNav";
 
-const API_KEY_STORAGE = "m5os_groq_key";
-const GROQ_API_KEY_ENV = import.meta.env.VITE_GROQ_API_KEY as string | undefined;
+import { GROQ_STORAGE_KEY, GROQ_MODEL, GROQ_API_URL } from "../lib/groq";
 
 const SYSTEM_PROMPT = `Você é o M5 AI — assistente interno da M5 Marketing, agência digital brasileira especializada em tráfego pago, gestão de redes sociais e performance.
 
@@ -179,7 +178,7 @@ interface HomeViewProps {
 
 export function HomeView({ profile, onNavigate }: HomeViewProps) {
   const firstName = profile?.display_name?.split(" ")[0] ?? "time";
-  const [apiKey, setApiKey] = useState(() => GROQ_API_KEY_ENV || localStorage.getItem(API_KEY_STORAGE) || "");
+  const [apiKey, setApiKey] = useState(() => (import.meta.env.VITE_GROQ_API_KEY as string | undefined) || localStorage.getItem(GROQ_STORAGE_KEY) || "");
   const [showSettings, setShowSettings] = useState(false);
   const [keyDraft, setKeyDraft] = useState(apiKey);
   const [messages, setMessages] = useState<Message[]>([
@@ -201,7 +200,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
 
   const saveApiKey = useCallback(() => {
     const trimmed = keyDraft.trim();
-    localStorage.setItem(API_KEY_STORAGE, trimmed);
+    localStorage.setItem(GROQ_STORAGE_KEY, trimmed);
     setApiKey(trimmed);
     setShowSettings(false);
   }, [keyDraft]);
@@ -230,7 +229,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
       abortRef.current = ctrl;
 
       try {
-        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        const res = await fetch(GROQ_API_URL, {
           method: "POST",
           signal: ctrl.signal,
           headers: {
@@ -238,7 +237,7 @@ export function HomeView({ profile, onNavigate }: HomeViewProps) {
             "authorization": `Bearer ${apiKey}`,
           },
           body: JSON.stringify({
-            model: "llama-3.3-70b-versatile",
+            model: GROQ_MODEL,
             max_tokens: 1024,
             stream: true,
             messages: [

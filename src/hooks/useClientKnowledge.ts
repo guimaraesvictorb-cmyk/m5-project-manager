@@ -17,8 +17,9 @@ export function useClientKnowledge(clientId: string) {
   const [entries, setEntries] = useState<KnowledgeEntry[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetch = useCallback(async () => {
+  const refetch = useCallback(async () => {
     setLoading(true)
+    setEntries([])
     const { data } = await supabase
       .from('client_knowledge')
       .select('*')
@@ -28,7 +29,7 @@ export function useClientKnowledge(clientId: string) {
     setLoading(false)
   }, [clientId])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => { refetch() }, [refetch])
 
   async function addEntry(entry: Omit<KnowledgeEntry, 'id' | 'created_at' | 'updated_at'>) {
     const { data, error } = await supabase.from('client_knowledge').insert(entry).select().single()
@@ -55,5 +56,5 @@ export function useClientKnowledge(clientId: string) {
   const validated = entries.filter((e) => e.validated)
   const pending = entries.filter((e) => !e.validated)
 
-  return { entries, validated, pending, loading, fetch, addEntry, validateEntry, deleteEntry }
+  return { validated, pending, loading, refetch, addEntry, validateEntry, deleteEntry }
 }

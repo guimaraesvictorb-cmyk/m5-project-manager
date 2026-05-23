@@ -1,22 +1,9 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ExternalLink, Plus, Search, Loader2, X, Check } from "lucide-react";
 import { useClients } from "../hooks/useClients";
 import { useAuth } from "../hooks/useAuth";
 import type { Client } from "../lib/database.types";
-
-const FLAG_META = {
-  green:  { label: "Green",  color: "#1FCE4A", bg: "#0d1f14" },
-  yellow: { label: "Yellow", color: "#F59E0B", bg: "#1a1200" },
-  red:    { label: "Red",    color: "#EF4444", bg: "#1a0505" },
-};
-
-const STATUS_META: Record<Client["status"], { label: string; color: string }> = {
-  ativo:       { label: "Ativo",       color: "#1FCE4A" },
-  pausado:     { label: "Pausado",     color: "#F59E0B" },
-  em_risco:    { label: "Em Risco",    color: "#EF4444" },
-  offboarding: { label: "Offboarding", color: "#8B5CF6" },
-  churned:     { label: "Churned",     color: "#525252" },
-};
+import { FLAG_META, STATUS_META } from "../lib/clientMeta";
 
 function initials(name: string) {
   return name.split(" ").slice(0, 2).map((w) => w[0]).join("").toUpperCase();
@@ -220,7 +207,7 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
   const [filterFlag, setFilterFlag] = useState("todos");
   const [showNewModal, setShowNewModal] = useState(false);
 
-  const filtered = clients.filter((c) => {
+  const filtered = useMemo(() => clients.filter((c) => {
     if (filterStatus !== "todos" && c.status !== filterStatus) return false;
     if (filterFlag !== "todos" && c.health_flag !== filterFlag) return false;
     if (search.trim()) {
@@ -228,7 +215,7 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
       return c.name.toLowerCase().includes(q) || (c.segment ?? "").toLowerCase().includes(q) || (c.primary_contact_name ?? "").toLowerCase().includes(q);
     }
     return true;
-  });
+  }), [clients, filterStatus, filterFlag, search]);
 
   const selectCls = "bg-[#0d0d0d] border border-[#1e1e1e] rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors appearance-none cursor-pointer";
 
@@ -245,8 +232,8 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
     );
   }
 
-  const ativos = clients.filter((c) => c.status === "ativo").length;
-  const emRisco = clients.filter((c) => c.health_flag === "red").length;
+  const ativos = useMemo(() => clients.filter((c) => c.status === "ativo").length, [clients]);
+  const emRisco = useMemo(() => clients.filter((c) => c.health_flag === "red").length, [clients]);
 
   return (
     <div className="space-y-5">
