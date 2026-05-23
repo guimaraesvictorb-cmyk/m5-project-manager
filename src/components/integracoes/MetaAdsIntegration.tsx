@@ -94,7 +94,7 @@ async function fetchMonthlyInsights(adAccountId: string, token: string, monthsBa
 
 export function MetaAdsIntegration() {
   const { profile } = useAuth();
-  const { clients } = useClients();
+  const { clients, loading: clientsLoading } = useClients();
   const [token, setToken] = useState(localStorage.getItem(META_STORAGE_KEY) ?? "");
   const [savedToken, setSavedToken] = useState(localStorage.getItem(META_STORAGE_KEY) ?? "");
   const [accounts, setAccounts] = useState<AdAccount[]>([]);
@@ -102,7 +102,6 @@ export function MetaAdsIntegration() {
   const [syncing, setSyncing] = useState<Record<string, boolean>>({});
   const [syncResults, setSyncResults] = useState<Record<string, "ok" | "fail">>({});
   const [error, setError] = useState("");
-  const [expandedClient, setExpandedClient] = useState<string | null>(null);
   const [clientAccountMap, setClientAccountMap] = useState<Record<string, string>>({});
   const [showInstructions, setShowInstructions] = useState(false);
 
@@ -244,56 +243,56 @@ export function MetaAdsIntegration() {
         <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "#0a0a0a", borderColor: "#1a1a1a" }}>
           <div className="px-5 py-3 border-b" style={{ borderColor: "#111" }}>
             <p className="text-xs font-bold text-white">Sincronizar clientes</p>
-            <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>Selecione a conta de anúncios de cada cliente e clique em Sincronizar</p>
+            <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>
+              Para cada cliente, escolha a conta de anúncios correspondente e clique em Sincronizar
+            </p>
           </div>
-          <div className="divide-y" style={{ borderColor: "#111" }}>
-            {activeClients.map((client) => {
-              const expanded = expandedClient === client.id;
-              const mapped = clientAccountMap[client.id] ?? client.meta_ads_account_id ?? "";
-              const isSyncing = syncing[client.id];
-              const result = syncResults[client.id];
 
-              return (
-                <div key={client.id}>
-                  <div
-                    className="flex items-center gap-3 px-5 py-3 cursor-pointer"
-                    onClick={() => setExpandedClient(expanded ? null : client.id)}
-                  >
-                    <div className="flex-1 min-w-0">
+          {clientsLoading ? (
+            <div className="flex items-center justify-center py-10">
+              <Loader2 size={18} className="animate-spin" style={{ color: "#1877F2" }} />
+            </div>
+          ) : activeClients.length === 0 ? (
+            <div className="py-10 text-center text-xs" style={{ color: "#444" }}>
+              Nenhum cliente ativo encontrado
+            </div>
+          ) : (
+            <div className="divide-y" style={{ borderColor: "#111" }}>
+              {activeClients.map((client) => {
+                const mapped = clientAccountMap[client.id] ?? client.meta_ads_account_id ?? "";
+                const isSyncing = syncing[client.id];
+                const result = syncResults[client.id];
+
+                return (
+                  <div key={client.id} className="px-5 py-4 flex items-center gap-3">
+                    <div className="w-36 flex-shrink-0">
                       <p className="text-xs font-medium text-white truncate">{client.name}</p>
-                      {mapped && <p className="text-[10px]" style={{ color: "#444" }}>Conta: {accounts.find((a) => a.id === mapped)?.name ?? mapped}</p>}
+                      {result === "ok" && <p className="text-[10px] flex items-center gap-1 mt-0.5" style={{ color: "#1FCE4A" }}><Check size={10} />Sincronizado</p>}
+                      {result === "fail" && <p className="text-[10px] mt-0.5" style={{ color: "#EF4444" }}>Falhou</p>}
                     </div>
-                    {result === "ok" && <span className="text-[10px] flex items-center gap-1" style={{ color: "#1FCE4A" }}><Check size={11} />Sincronizado</span>}
-                    {result === "fail" && <span className="text-[10px]" style={{ color: "#EF4444" }}>Falhou</span>}
-                    {expanded ? <ChevronUp size={13} style={{ color: "#555" }} /> : <ChevronDown size={13} style={{ color: "#555" }} />}
+                    <select
+                      value={mapped}
+                      onChange={(e) => setClientAccountMap((m) => ({ ...m, [client.id]: e.target.value }))}
+                      className="flex-1 rounded-lg px-3 py-2 text-xs text-white appearance-none focus:outline-none"
+                      style={inpStyle}>
+                      <option value="">— Selecione a conta de anúncios —</option>
+                      {accounts.map((a) => (
+                        <option key={a.id} value={a.id}>{a.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={() => syncClient(client.id, mapped)}
+                      disabled={isSyncing || !mapped}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 flex-shrink-0"
+                      style={{ backgroundColor: "#1877F222", color: "#1877F2", border: "1px solid #1877F244" }}>
+                      {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                      Sincronizar
+                    </button>
                   </div>
-
-                  {expanded && (
-                    <div className="px-5 pb-4 flex items-center gap-3" style={{ backgroundColor: "#080808" }}>
-                      <select
-                        value={mapped}
-                        onChange={(e) => setClientAccountMap((m) => ({ ...m, [client.id]: e.target.value }))}
-                        className="flex-1 rounded-lg px-3 py-2 text-xs text-white appearance-none focus:outline-none"
-                        style={inpStyle}>
-                        <option value="">Selecione a conta de anúncios...</option>
-                        {accounts.map((a) => (
-                          <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
-                        ))}
-                      </select>
-                      <button
-                        onClick={() => syncClient(client.id, clientAccountMap[client.id] ?? client.meta_ads_account_id ?? "")}
-                        disabled={isSyncing || !mapped}
-                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
-                        style={{ backgroundColor: "#1877F222", color: "#1877F2", border: "1px solid #1877F244" }}>
-                        {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
-                        Sincronizar (3 meses)
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 
