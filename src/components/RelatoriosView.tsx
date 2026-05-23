@@ -10,7 +10,7 @@ import type { Client } from "../lib/database.types";
 
 function fmtCurrency(n: number | null | undefined) {
   if (n == null) return "não informado";
-  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+  return "R$ " + n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function ReportContent({ html }: { html: string }) {

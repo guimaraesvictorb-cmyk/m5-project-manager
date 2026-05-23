@@ -2,23 +2,9 @@ import { useState } from 'react'
 import { Plus, Trash2, ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Loader2 } from 'lucide-react'
 import { useClientAdsMetrics, type AdsMetric, type AdsMetricInput } from '../../hooks/useClientAdsMetrics'
 import { useAuth } from '../../hooks/useAuth'
+import { fmt, fmtCurrency, fmtPct } from '../../lib/formatters'
 
 type Platform = 'meta' | 'google'
-
-function fmt(n: number | null | undefined, prefix = '') {
-  if (n == null) return '—'
-  return prefix + n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
-}
-
-function fmtCurrency(n: number | null | undefined) {
-  if (n == null) return '—'
-  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
-
-function fmtPct(n: number | null | undefined) {
-  if (n == null) return '—'
-  return n.toFixed(2) + '%'
-}
 
 function Trend({ curr, prev }: { curr: number | null; prev: number | null }) {
   if (curr == null || prev == null || prev === 0) return null

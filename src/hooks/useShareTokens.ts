@@ -32,13 +32,13 @@ export function useShareTokens(clientId: string) {
       ? new Date(Date.now() + expiresInDays * 86400000).toISOString()
       : null;
     const { data: user } = await supabase.auth.getUser();
-    await supabase.from("client_share_tokens").insert({
+    const { data } = await supabase.from("client_share_tokens").insert({
       client_id: clientId,
       label: label || null,
       expires_at,
       created_by: user.user?.id,
-    });
-    await fetch();
+    }).select().single();
+    if (data) setTokens((prev) => [data, ...prev]);
   }
 
   async function deleteToken(id: string) {

@@ -49,30 +49,31 @@ interface SyncResult {
 }
 
 async function fetchMonthlyInsights(adAccountId: string, token: string, monthsBack = 3): Promise<SyncResult[]> {
-  const results: SyncResult[] = [];
   const now = new Date();
 
-  for (let i = 0; i < monthsBack; i++) {
+  const months = Array.from({ length: monthsBack }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const since = d.toISOString().split("T")[0];
-    const until = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
-    const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return {
+      since: d.toISOString().split("T")[0],
+      until: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0],
+      period: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    };
+  });
 
-    try {
-      const data: { data: MetaInsights[] } = await metaGet(`/${adAccountId}/insights`, token, {
+  const settled = await Promise.allSettled(
+    months.map(({ since, until, period }) =>
+      metaGet(`/${adAccountId}/insights`, token, {
         fields: "impressions,clicks,spend,reach,ctr,actions",
         time_range: JSON.stringify({ since, until }),
         level: "account",
-      });
-
-      if (data.data?.[0]) {
+      }).then((data: { data: MetaInsights[] }) => {
+        if (!data.data?.[0]) return null;
         const ins = data.data[0];
         const leads = ins.actions?.find((a) => ["lead", "offsite_conversion.fb_pixel_lead", "onsite_conversion.lead_grouped"].includes(a.action_type));
         const purchases = ins.actions?.find((a) => ["purchase", "offsite_conversion.fb_pixel_purchase"].includes(a.action_type));
         const actionVal = Number(leads?.value ?? purchases?.value ?? 0);
         const spend = parseFloat(ins.spend ?? "0");
-
-        results.push({
+        return {
           period,
           spend,
           impressions: parseInt(ins.impressions ?? "0"),
@@ -81,14 +82,14 @@ async function fetchMonthlyInsights(adAccountId: string, token: string, monthsBa
           ctr: parseFloat(ins.ctr ?? "0"),
           results: actionVal,
           cost_per_result: actionVal > 0 ? spend / actionVal : 0,
-        });
-      }
-    } catch {
-      // Skip month if no data
-    }
-  }
+        } satisfies SyncResult;
+      })
+    )
+  );
 
-  return results;
+  return settled
+    .filter((r): r is PromiseFulfilledResult<SyncResult | null> => r.status === "fulfilled" && r.value !== null)
+    .map((r) => r.value as SyncResult);
 }
 
 export function MetaAdsIntegration() {

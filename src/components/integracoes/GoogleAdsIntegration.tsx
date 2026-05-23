@@ -39,16 +39,19 @@ async function fetchGoogleAccounts(token: string): Promise<CustomerAccount[]> {
 }
 
 async function fetchGoogleInsights(customerId: string, token: string, devToken: string, monthsBack = 3): Promise<SyncResult[]> {
-  const results: SyncResult[] = [];
   const now = new Date();
 
-  for (let i = 0; i < monthsBack; i++) {
+  const months = Array.from({ length: monthsBack }, (_, i) => {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const since = d.toISOString().split("T")[0];
-    const until = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
-    const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    return {
+      since: d.toISOString().split("T")[0],
+      until: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0],
+      period: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+    };
+  });
 
-    try {
+  const settled = await Promise.allSettled(
+    months.map(async ({ since, until, period }) => {
       const query = `SELECT metrics.cost_micros, metrics.clicks, metrics.impressions, metrics.conversions FROM customer WHERE segments.date BETWEEN '${since}' AND '${until}'`;
       const res = await fetch(`https://googleads.googleapis.com/v16/customers/${customerId}/googleAds:search`, {
         method: "POST",
@@ -61,7 +64,7 @@ async function fetchGoogleInsights(customerId: string, token: string, devToken: 
         body: JSON.stringify({ query }),
       });
       const json = await res.json();
-      if (json.error) continue;
+      if (json.error) return null;
 
       let cost = 0, clicks = 0, impressions = 0, conversions = 0;
       for (const row of json.results ?? []) {
@@ -71,15 +74,13 @@ async function fetchGoogleInsights(customerId: string, token: string, devToken: 
         conversions += row.metrics?.conversions ?? 0;
       }
 
-      if (cost > 0 || clicks > 0) {
-        results.push({ period, cost, clicks, impressions, conversions });
-      }
-    } catch {
-      // Skip month
-    }
-  }
+      return cost > 0 || clicks > 0 ? { period, cost, clicks, impressions, conversions } satisfies SyncResult : null;
+    })
+  );
 
-  return results;
+  return settled
+    .filter((r): r is PromiseFulfilledResult<SyncResult | null> => r.status === "fulfilled" && r.value !== null)
+    .map((r) => r.value as SyncResult);
 }
 
 export function GoogleAdsIntegration() {

@@ -1,14 +1,6 @@
 import { Loader2 } from 'lucide-react'
 import { useClientAdsMetrics } from '../../hooks/useClientAdsMetrics'
-
-function fmt(n: number | null | undefined) {
-  if (n == null) return '—'
-  return n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
-}
-function fmtCurrency(n: number | null | undefined) {
-  if (n == null) return '—'
-  return 'R$ ' + n.toLocaleString('pt-BR', { minimumFractionDigits: 2 })
-}
+import { fmt, fmtCurrency } from '../../lib/formatters'
 
 interface CompiladoTabProps { clientId: string }
 

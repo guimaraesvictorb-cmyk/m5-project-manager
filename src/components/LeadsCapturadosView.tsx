@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useUTMCaptures, type UTMCapture } from "../hooks/useUTMCaptures";
 import { useAuth } from "../hooks/useAuth";
 import { supabase } from "../lib/supabase";
@@ -75,12 +75,12 @@ function ConvertModal({ capture, onClose, onConverted }: {
   const [converting, setConverting] = useState(false);
   const { convertToLead } = useUTMCaptures();
 
-  useState(() => {
+  useEffect(() => {
     supabase.from("pipeline_stages").select("id,name").order("sort_order").then(({ data }) => {
       setStages(data ?? []);
       if (data?.[0]) setStageId(data[0].id);
     });
-  });
+  }, []);
 
   async function doConvert() {
     if (!stageId || !profile) return;
@@ -127,8 +127,8 @@ function ConvertModal({ capture, onClose, onConverted }: {
 
 function WebhookDocs() {
   const [copied, setCopied] = useState(false);
-  const url = `https://pkncvfssrbjjpgwstelo.supabase.co/rest/v1/rpc/capture_lead_utm`;
-  const anonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBrbmN2ZnNzcmJqanBnd3N0ZWxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcwNjU1MjcsImV4cCI6MjA2MjY0MTUyN30.t3FqJFB7mF7JoNF9UMqk9XiIQ6o7F4jIwuJfnNORKKk";
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/rpc/capture_lead_utm`;
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
   const snippet = `// Integração com seu site/landing page
 fetch("${url}", {

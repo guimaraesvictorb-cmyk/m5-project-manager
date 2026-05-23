@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
 import { FLAG_META, STATUS_META } from "../lib/clientMeta";
+import { fmt, fmtInt } from "../lib/formatters";
 import { Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 interface SharedMetric {
@@ -28,15 +29,6 @@ interface SharedClient {
   tipo_servico: string | null;
 }
 
-function fmt(n: number | null | undefined, prefix = "") {
-  if (n == null) return "—";
-  return prefix + n.toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-}
-
-function fmtInt(n: number | null | undefined) {
-  if (n == null) return "—";
-  return n.toLocaleString("pt-BR");
-}
 
 function Trend({ curr, prev }: { curr: number | null; prev: number | null }) {
   if (curr == null || prev == null || prev === 0) return <Minus size={12} style={{ color: "#555" }} />;
