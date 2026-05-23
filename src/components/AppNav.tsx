@@ -1,7 +1,7 @@
 import {
   Sparkles, LayoutDashboard, CheckSquare, Users, DollarSign,
   TrendingUp, BookOpen, Building2, UserCircle, LogOut, ShieldCheck,
-  ChevronRight, Settings, Link2, PenTool, FileText, Bot, MessageSquare,
+  ChevronRight, Settings, Link2, PenTool, FileText, Bot, MessageSquare, Plug,
 } from "lucide-react";
 import type { Profile } from "../lib/database.types";
 
@@ -13,7 +13,7 @@ export type AppView =
   | "processos" | "central"
   | "rastreamento"
   | "super-agente" | "copy-ia" | "relatorios"
-  | "whatsapp"
+  | "whatsapp" | "integracoes"
   | "profile" | "settings";
 
 interface NavItem { view: AppView; label: string; icon: React.ReactNode }
@@ -54,7 +54,8 @@ const NAV: NavGroup[] = [
   {
     label: "Comunicação",
     items: [
-      { view: "whatsapp", label: "WhatsApp", icon: <MessageSquare size={15} /> },
+      { view: "whatsapp",    label: "WhatsApp",    icon: <MessageSquare size={15} /> },
+      { view: "integracoes", label: "Integrações", icon: <Plug size={15} /> },
     ],
   },
   {

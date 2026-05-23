@@ -1,0 +1,306 @@
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "../../lib/supabase";
+import { useAuth } from "../../hooks/useAuth";
+import { useClients } from "../../hooks/useClients";
+import {
+  Check, Loader2, RefreshCw, AlertCircle, ExternalLink,
+  Unlink, ChevronDown, ChevronUp,
+} from "lucide-react";
+
+const META_STORAGE_KEY = "m5os_meta_token";
+
+interface AdAccount {
+  id: string;
+  name: string;
+  account_status: number;
+  currency: string;
+}
+
+interface MetaInsights {
+  impressions: string;
+  clicks: string;
+  spend: string;
+  reach: string;
+  ctr: string;
+  actions?: Array<{ action_type: string; value: string }>;
+}
+
+const META_GRAPH = "https://graph.facebook.com/v18.0";
+
+async function metaGet(path: string, token: string, params: Record<string, string> = {}) {
+  const url = new URL(`${META_GRAPH}${path}`);
+  url.searchParams.set("access_token", token);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const res = await fetch(url.toString());
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message);
+  return json;
+}
+
+interface SyncResult {
+  period: string;
+  spend: number;
+  impressions: number;
+  reach: number;
+  clicks: number;
+  ctr: number;
+  results: number;
+  cost_per_result: number;
+}
+
+async function fetchMonthlyInsights(adAccountId: string, token: string, monthsBack = 3): Promise<SyncResult[]> {
+  const results: SyncResult[] = [];
+  const now = new Date();
+
+  for (let i = 0; i < monthsBack; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const since = d.toISOString().split("T")[0];
+    const until = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split("T")[0];
+    const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+
+    try {
+      const data: { data: MetaInsights[] } = await metaGet(`/${adAccountId}/insights`, token, {
+        fields: "impressions,clicks,spend,reach,ctr,actions",
+        time_range: JSON.stringify({ since, until }),
+        level: "account",
+      });
+
+      if (data.data?.[0]) {
+        const ins = data.data[0];
+        const leads = ins.actions?.find((a) => ["lead", "offsite_conversion.fb_pixel_lead", "onsite_conversion.lead_grouped"].includes(a.action_type));
+        const purchases = ins.actions?.find((a) => ["purchase", "offsite_conversion.fb_pixel_purchase"].includes(a.action_type));
+        const actionVal = Number(leads?.value ?? purchases?.value ?? 0);
+        const spend = parseFloat(ins.spend ?? "0");
+
+        results.push({
+          period,
+          spend,
+          impressions: parseInt(ins.impressions ?? "0"),
+          reach: parseInt(ins.reach ?? "0"),
+          clicks: parseInt(ins.clicks ?? "0"),
+          ctr: parseFloat(ins.ctr ?? "0"),
+          results: actionVal,
+          cost_per_result: actionVal > 0 ? spend / actionVal : 0,
+        });
+      }
+    } catch {
+      // Skip month if no data
+    }
+  }
+
+  return results;
+}
+
+export function MetaAdsIntegration() {
+  const { profile } = useAuth();
+  const { clients } = useClients();
+  const [token, setToken] = useState(localStorage.getItem(META_STORAGE_KEY) ?? "");
+  const [savedToken, setSavedToken] = useState(localStorage.getItem(META_STORAGE_KEY) ?? "");
+  const [accounts, setAccounts] = useState<AdAccount[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [syncing, setSyncing] = useState<Record<string, boolean>>({});
+  const [syncResults, setSyncResults] = useState<Record<string, "ok" | "fail">>({});
+  const [error, setError] = useState("");
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+  const [clientAccountMap, setClientAccountMap] = useState<Record<string, string>>({});
+  const [showInstructions, setShowInstructions] = useState(false);
+
+  const activeClients = clients.filter((c) => c.status !== "churned");
+
+  const loadAccounts = useCallback(async (t: string) => {
+    if (!t) return;
+    setLoading(true);
+    setError("");
+    try {
+      const data = await metaGet("/me/adaccounts", t, {
+        fields: "id,name,account_status,currency",
+        limit: "50",
+      });
+      setAccounts(data.data ?? []);
+    } catch (err: unknown) {
+      setError((err as Error).message);
+      setAccounts([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (savedToken) loadAccounts(savedToken);
+  }, [savedToken, loadAccounts]);
+
+  function saveToken() {
+    localStorage.setItem(META_STORAGE_KEY, token);
+    setSavedToken(token);
+  }
+
+  function disconnect() {
+    localStorage.removeItem(META_STORAGE_KEY);
+    setSavedToken("");
+    setToken("");
+    setAccounts([]);
+  }
+
+  async function syncClient(clientId: string, adAccountId: string) {
+    if (!savedToken || !adAccountId) return;
+    setSyncing((s) => ({ ...s, [clientId]: true }));
+    setSyncResults((s) => ({ ...s, [clientId]: undefined as unknown as "ok" }));
+    try {
+      const insights = await fetchMonthlyInsights(adAccountId, savedToken, 3);
+      if (insights.length === 0) throw new Error("Nenhum dado encontrado para este período");
+
+      await Promise.all(
+        insights.map((ins) =>
+          supabase.from("client_ads_metrics").upsert({
+            client_id: clientId,
+            platform: "meta",
+            period: ins.period,
+            investimento: ins.spend,
+            impressoes: ins.impressions,
+            alcance: ins.reach,
+            cliques: ins.clicks,
+            ctr: ins.ctr,
+            resultados: ins.results,
+            custo_por_resultado: ins.cost_per_result,
+            synced_from_api: true,
+          }, { onConflict: "client_id,platform,period" })
+        )
+      );
+
+      await supabase.from("clients").update({ meta_ads_account_id: adAccountId }).eq("id", clientId);
+      setSyncResults((s) => ({ ...s, [clientId]: "ok" }));
+    } catch (err: unknown) {
+      setError((err as Error).message);
+      setSyncResults((s) => ({ ...s, [clientId]: "fail" }));
+    } finally {
+      setSyncing((s) => ({ ...s, [clientId]: false }));
+    }
+  }
+
+  const inp = "w-full rounded-lg px-3 py-2 text-xs text-white placeholder-[#333] focus:outline-none";
+  const inpStyle = { backgroundColor: "#0d0d0d", border: "1px solid #1e1e1e" };
+
+  return (
+    <div className="space-y-6">
+      {/* Token section */}
+      <div className="rounded-2xl border p-5 space-y-4" style={{ backgroundColor: "#0a0a0a", borderColor: "#1a1a1a" }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-bold text-white">Meta Ads</p>
+            <p className="text-xs mt-0.5" style={{ color: "#555" }}>Conecte sua conta para sincronizar métricas automaticamente</p>
+          </div>
+          {savedToken && accounts.length > 0 && (
+            <span className="flex items-center gap-1.5 text-xs" style={{ color: "#1FCE4A" }}>
+              <Check size={12} />Conectado ({accounts.length} conta{accounts.length !== 1 ? "s" : ""})
+            </span>
+          )}
+        </div>
+
+        <button onClick={() => setShowInstructions(!showInstructions)} className="flex items-center gap-1.5 text-xs" style={{ color: "#1877F2" }}>
+          {showInstructions ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+          Como obter o token de acesso (gratuito)
+        </button>
+
+        {showInstructions && (
+          <div className="rounded-xl p-4 space-y-2 text-xs" style={{ backgroundColor: "#0a0f1a", border: "1px solid #1877F222" }}>
+            <p className="font-bold" style={{ color: "#1877F2" }}>Passo a passo:</p>
+            <p style={{ color: "#555" }}>1. Acesse <a href="https://developers.facebook.com/tools/explorer" target="_blank" rel="noopener noreferrer" className="underline" style={{ color: "#1877F2" }}>developers.facebook.com/tools/explorer <ExternalLink size={10} className="inline" /></a></p>
+            <p style={{ color: "#555" }}>2. Clique em "Generate Access Token"</p>
+            <p style={{ color: "#555" }}>3. Selecione as permissões: <strong className="text-white">ads_read</strong>, <strong className="text-white">ads_management</strong></p>
+            <p style={{ color: "#555" }}>4. Copie o token gerado e cole abaixo</p>
+            <p className="text-[10px] mt-1" style={{ color: "#333" }}>O token expira em 60 dias. Para tokens permanentes, configure um App próprio no Meta Developers.</p>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="Cole seu token de acesso Meta aqui..."
+            type="password"
+            className={inp + " flex-1"}
+            style={inpStyle}
+          />
+          <button onClick={saveToken} disabled={!token || token === savedToken}
+            className="px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
+            style={{ backgroundColor: "#1877F2", color: "#fff" }}>
+            {loading ? <Loader2 size={12} className="animate-spin" /> : "Conectar"}
+          </button>
+          {savedToken && (
+            <button onClick={disconnect} className="p-2 rounded-lg border transition-colors" style={{ borderColor: "#1e1e1e", color: "#555" }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#555"; }}>
+              <Unlink size={14} />
+            </button>
+          )}
+        </div>
+
+        {error && <p className="text-xs flex items-center gap-1.5" style={{ color: "#EF4444" }}><AlertCircle size={12} />{error}</p>}
+      </div>
+
+      {/* Client sync table */}
+      {accounts.length > 0 && (
+        <div className="rounded-2xl border overflow-hidden" style={{ backgroundColor: "#0a0a0a", borderColor: "#1a1a1a" }}>
+          <div className="px-5 py-3 border-b" style={{ borderColor: "#111" }}>
+            <p className="text-xs font-bold text-white">Sincronizar clientes</p>
+            <p className="text-[10px] mt-0.5" style={{ color: "#555" }}>Selecione a conta de anúncios de cada cliente e clique em Sincronizar</p>
+          </div>
+          <div className="divide-y" style={{ borderColor: "#111" }}>
+            {activeClients.map((client) => {
+              const expanded = expandedClient === client.id;
+              const mapped = clientAccountMap[client.id] ?? client.meta_ads_account_id ?? "";
+              const isSyncing = syncing[client.id];
+              const result = syncResults[client.id];
+
+              return (
+                <div key={client.id}>
+                  <div
+                    className="flex items-center gap-3 px-5 py-3 cursor-pointer"
+                    onClick={() => setExpandedClient(expanded ? null : client.id)}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-white truncate">{client.name}</p>
+                      {mapped && <p className="text-[10px]" style={{ color: "#444" }}>Conta: {accounts.find((a) => a.id === mapped)?.name ?? mapped}</p>}
+                    </div>
+                    {result === "ok" && <span className="text-[10px] flex items-center gap-1" style={{ color: "#1FCE4A" }}><Check size={11} />Sincronizado</span>}
+                    {result === "fail" && <span className="text-[10px]" style={{ color: "#EF4444" }}>Falhou</span>}
+                    {expanded ? <ChevronUp size={13} style={{ color: "#555" }} /> : <ChevronDown size={13} style={{ color: "#555" }} />}
+                  </div>
+
+                  {expanded && (
+                    <div className="px-5 pb-4 flex items-center gap-3" style={{ backgroundColor: "#080808" }}>
+                      <select
+                        value={mapped}
+                        onChange={(e) => setClientAccountMap((m) => ({ ...m, [client.id]: e.target.value }))}
+                        className="flex-1 rounded-lg px-3 py-2 text-xs text-white appearance-none focus:outline-none"
+                        style={inpStyle}>
+                        <option value="">Selecione a conta de anúncios...</option>
+                        {accounts.map((a) => (
+                          <option key={a.id} value={a.id}>{a.name} ({a.id})</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => syncClient(client.id, clientAccountMap[client.id] ?? client.meta_ads_account_id ?? "")}
+                        disabled={isSyncing || !mapped}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
+                        style={{ backgroundColor: "#1877F222", color: "#1877F2", border: "1px solid #1877F244" }}>
+                        {isSyncing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                        Sincronizar (3 meses)
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {profile?.role === "admin" && (
+        <p className="text-[10px] text-center" style={{ color: "#222" }}>
+          Para tokens permanentes, configure uma Meta App em developers.facebook.com e implemente OAuth com seu próprio App ID.
+        </p>
+      )}
+    </div>
+  );
+}
