@@ -238,6 +238,9 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
     await createClient({ ...data, created_by: profile.id } as never);
   }
 
+  const ativos = useMemo(() => clients.filter((c) => c.status === "ativo").length, [clients]);
+  const emRisco = useMemo(() => clients.filter((c) => c.health_flag === "red").length, [clients]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-40">
@@ -245,9 +248,6 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
       </div>
     );
   }
-
-  const ativos = useMemo(() => clients.filter((c) => c.status === "ativo").length, [clients]);
-  const emRisco = useMemo(() => clients.filter((c) => c.health_flag === "red").length, [clients]);
 
   return (
     <div className="space-y-5">

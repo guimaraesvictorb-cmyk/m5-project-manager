@@ -253,8 +253,9 @@ export function MetaAdsIntegration() {
               <Loader2 size={18} className="animate-spin" style={{ color: "#1877F2" }} />
             </div>
           ) : activeClients.length === 0 ? (
-            <div className="py-10 text-center text-xs" style={{ color: "#444" }}>
-              Nenhum cliente ativo encontrado
+            <div className="py-10 text-center space-y-2" style={{ color: "#444" }}>
+              <p className="text-xs font-semibold text-white">Nenhum cliente cadastrado</p>
+              <p className="text-[11px]">Vá para a seção <strong className="text-white">Clientes</strong> e adicione seus clientes primeiro.</p>
             </div>
           ) : (
             <div className="divide-y" style={{ borderColor: "#111" }}>
