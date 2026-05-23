@@ -17,6 +17,7 @@ import { RastreamentoView } from "./components/RastreamentoView";
 import { SuperAgenteView } from "./components/SuperAgenteView";
 import { CopyIAView } from "./components/CopyIAView";
 import { RelatoriosView } from "./components/RelatoriosView";
+import { WhatsAppView } from "./components/WhatsAppView";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Loader2 } from "lucide-react";
 
@@ -54,6 +55,7 @@ function App() {
           {view === "super-agente" && <SuperAgenteView />}
           {view === "copy-ia"      && <CopyIAView />}
           {view === "relatorios"   && <RelatoriosView />}
+          {view === "whatsapp"     && <WhatsAppView />}
           {view === "profile"    && <ProfileView profile={profile} userEmail={user?.email ?? ""} />}
           {view === "settings"   && <SettingsView profile={profile} />}
         </main>

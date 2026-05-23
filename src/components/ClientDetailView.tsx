@@ -2,11 +2,12 @@ import { useState, useRef, useEffect, useMemo } from "react"
 import {
   ArrowLeft, Globe, User, Phone, Mail, DollarSign, Tag,
   Plus, Check, Trash2, Brain, Send, Loader2, Sparkles,
-  BookOpen, X, ListChecks, Calendar,
+  BookOpen, X, ListChecks, Calendar, Share2, Copy, Link,
 } from "lucide-react"
 import type { Client } from "../lib/database.types"
 import { useClientKnowledge, type KnowledgeEntry } from "../hooks/useClientKnowledge"
 import { useClientChecklist } from "../hooks/useClientChecklist"
+import { useShareTokens } from "../hooks/useShareTokens"
 import { useAuth } from "../hooks/useAuth"
 import { FLAG_META, STATUS_META } from "../lib/clientMeta"
 import { getGroqApiKey, GROQ_MODEL, GROQ_API_URL } from "../lib/groq"
@@ -346,12 +347,21 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
   const [tab, setTab] = useState<Tab>("overview")
   const [showAddModal, setShowAddModal] = useState(false)
   const [showAddChecklist, setShowAddChecklist] = useState(false)
+  const [showShareModal, setShowShareModal] = useState(false)
   const [newItemTitle, setNewItemTitle] = useState("")
   const [newItemCategory, setNewItemCategory] = useState("")
   const [suggesting, setSuggesting] = useState(false)
   const [suggestError, setSuggestError] = useState("")
+  const [copiedToken, setCopiedToken] = useState<string | null>(null)
   const { validated, pending, addEntry, validateEntry, deleteEntry } = useClientKnowledge(client.id)
   const { items, done, toggleItem, addItem, deleteItem } = useClientChecklist(client.id)
+  const { tokens, createToken, deleteToken } = useShareTokens(client.id)
+
+  function copyShareLink(token: string) {
+    navigator.clipboard.writeText(`${window.location.origin}?share=${token}`)
+    setCopiedToken(token)
+    setTimeout(() => setCopiedToken(null), 2000)
+  }
 
   const flag = FLAG_META[client.health_flag]
   const status = STATUS_META[client.status]
@@ -426,6 +436,44 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
 
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: "#060606" }}>
+      {showShareModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+          <div className="rounded-2xl border w-full max-w-md" style={{ backgroundColor: "#0a0a0a", borderColor: "#1a1a1a" }}>
+            <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#1a1a1a" }}>
+              <p className="text-sm font-semibold text-white">Links de acesso do cliente</p>
+              <button onClick={() => setShowShareModal(false)}><X size={16} style={{ color: "#555" }} /></button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <p className="text-xs" style={{ color: "#555" }}>Gere um link para o cliente visualizar suas métricas de anúncios sem precisar fazer login.</p>
+              <button onClick={() => createToken("Link do cliente")}
+                className="w-full py-2.5 rounded-xl text-xs font-semibold flex items-center justify-center gap-2 transition-all"
+                style={{ backgroundColor: "#1FCE4A", color: "#000" }}>
+                <Link size={13} />Gerar novo link
+              </button>
+              {tokens.length === 0 && (
+                <p className="text-center text-xs py-4" style={{ color: "#333" }}>Nenhum link gerado ainda</p>
+              )}
+              {tokens.map((t) => (
+                <div key={t.id} className="rounded-xl border p-3 flex items-center gap-3" style={{ borderColor: "#1a1a1a" }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-white truncate">{t.label ?? "Link"}</p>
+                    <p className="text-[10px] truncate" style={{ color: "#444" }}>{window.location.origin}?share={t.token}</p>
+                    {t.expires_at && <p className="text-[10px]" style={{ color: "#EF4444" }}>Expira: {new Date(t.expires_at).toLocaleDateString("pt-BR")}</p>}
+                  </div>
+                  <button onClick={() => copyShareLink(t.token)} className="p-1.5 rounded-lg transition-colors" style={{ color: copiedToken === t.token ? "#1FCE4A" : "#555" }}>
+                    {copiedToken === t.token ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                  <button onClick={() => deleteToken(t.id)} className="p-1.5 rounded-lg transition-colors" style={{ color: "#333" }}
+                    onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#EF4444" }}
+                    onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#333" }}>
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       <div className="flex items-center gap-4 px-8 py-5" style={{ borderBottom: "1px solid #111" }}>
         <button
           onClick={onBack}
@@ -454,6 +502,12 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
           <span className="text-[11px] font-medium flex-shrink-0" style={{ color: status.color }}>
             {status.label}
           </span>
+          <button onClick={() => setShowShareModal(true)} className="ml-auto flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors flex-shrink-0"
+            style={{ borderColor: "#1e1e1e", color: "#555" }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#1FCE4A"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#1FCE4A44"; }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#555"; (e.currentTarget as HTMLButtonElement).style.borderColor = "#1e1e1e"; }}>
+            <Share2 size={12} />Compartilhar
+          </button>
         </div>
       </div>
 
