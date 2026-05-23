@@ -15,6 +15,7 @@ export interface Profile {
   avatar_url: string | null
   role: UserRole
   is_active: boolean
+  theme: string
   created_at: string
   updated_at: string
 }
@@ -35,6 +36,9 @@ export interface Client {
   primary_contact_email: string | null
   primary_contact_phone: string | null
   notes: string | null
+  tipo_servico: string | null
+  origem_lead: string | null
+  proxima_reuniao: string | null
   data_source: string
   meta_ads_account_id: string | null
   google_ads_account_id: string | null
@@ -55,6 +59,20 @@ export interface ClientAssignment {
   is_active: boolean
   assigned_by: string
   assigned_at: string
+}
+
+export interface ClientChecklist {
+  id: string
+  client_id: string
+  title: string
+  completed: boolean
+  category: string | null
+  sort_order: number
+  completed_by: string | null
+  completed_at: string | null
+  created_by: string
+  created_at: string
+  updated_at: string
 }
 
 export interface Quarter {
@@ -196,6 +214,11 @@ export interface Lead {
   source: string | null
   owner_id: string | null
   notes: string | null
+  tipo_servico: string | null
+  valor_proposta: number | null
+  link_proposta: string | null
+  data_fechamento: string | null
+  status_contrato: string | null
   lost_reason: string | null
   converted_to_client_id: string | null
   data_source: string
@@ -225,6 +248,7 @@ export type Database = {
       profiles: { Row: Profile; Insert: Omit<Profile, 'created_at' | 'updated_at'>; Update: Partial<Profile> }
       clients: { Row: Client; Insert: Omit<Client, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Client> }
       client_assignments: { Row: ClientAssignment; Insert: Omit<ClientAssignment, 'id'>; Update: Partial<ClientAssignment> }
+      client_checklist: { Row: ClientChecklist; Insert: Omit<ClientChecklist, 'id' | 'created_at' | 'updated_at'>; Update: Partial<ClientChecklist> }
       quarters: { Row: Quarter; Insert: Omit<Quarter, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Quarter> }
       playbooks: { Row: Playbook; Insert: Omit<Playbook, 'id' | 'created_at' | 'updated_at'>; Update: Partial<Playbook> }
       playbook_steps: { Row: PlaybookStep; Insert: Omit<PlaybookStep, 'id' | 'created_at' | 'updated_at'>; Update: Partial<PlaybookStep> }

@@ -12,6 +12,9 @@ import { PipelineView } from "./components/PipelineView";
 import { PlaybookView } from "./components/PlaybookView";
 import { CentralView } from "./components/central/CentralView";
 import { ProfileView } from "./components/ProfileView";
+import { SettingsView } from "./components/SettingsView";
+import { RastreamentoView } from "./components/RastreamentoView";
+import { ThemeProvider } from "./contexts/ThemeContext";
 import { Loader2 } from "lucide-react";
 
 function App() {
@@ -31,21 +34,25 @@ function App() {
   }
 
   return (
-    <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-      <AppNav active={view} onChange={setView} profile={profile} onLogout={logout} />
+    <ThemeProvider>
+      <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
+        <AppNav active={view} onChange={setView} profile={profile} onLogout={logout} />
 
-      <main className="flex-1 overflow-y-auto min-h-0">
-        {view === "home"       && <HomeView profile={profile} onNavigate={setView} />}
-        {view === "dashboard"  && <DashboardView />}
-        {view === "tarefas"    && <TarefasView />}
-        {view === "clientes"   && <ClientesView />}
-        {view === "financeiro" && <FinanceiroView />}
-        {view === "pipeline"   && <PipelineView />}
-        {view === "playbook"   && <PlaybookView />}
-        {view === "central"    && <CentralView />}
-        {view === "profile"    && <ProfileView profile={profile} userEmail={user?.email ?? ""} />}
-      </main>
-    </div>
+        <main className="flex-1 overflow-y-auto min-h-0">
+          {view === "home"       && <HomeView profile={profile} onNavigate={setView} />}
+          {view === "dashboard"  && <DashboardView />}
+          {view === "tarefas"    && <TarefasView />}
+          {view === "clientes"   && <ClientesView />}
+          {view === "financeiro" && <FinanceiroView />}
+          {view === "pipeline"   && <PipelineView />}
+          {view === "processos"     && <PlaybookView />}
+          {view === "central"       && <CentralView />}
+          {view === "rastreamento"  && <RastreamentoView />}
+          {view === "profile"    && <ProfileView profile={profile} userEmail={user?.email ?? ""} />}
+          {view === "settings"   && <SettingsView profile={profile} />}
+        </main>
+      </div>
+    </ThemeProvider>
   );
 }
 

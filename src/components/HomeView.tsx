@@ -11,7 +11,7 @@ Você está integrado ao M5 Operating System (M5 OS), a plataforma operacional i
 
 ## Estrutura do M5 OS (3 abas principais):
 
-### 🎯 Playbook (Metodologia M5)
+### 🎯 Processos (Metodologia M5)
 9 fases da jornada do cliente — da prospecção ao pós-venda:
 - F0: Prospecção — Identificação e qualificação de leads
 - F1: Conexão — Primeiro contato e rapport
@@ -52,7 +52,7 @@ Seções com sidebar de navegação:
 - Para **tarefas**: "Vá em Operação (aba do topo) e role para 'Gestão de Entregas'"
 - Para **rotinas**: "Vá em Central > OPS > Processos e clique na rotina desejada"
 - Para **clientes**: "Vá em Operação e role para 'Carteira de Clientes', ou Central > Clientes"
-- Para **playbook/metodologia**: "Vá em Playbook (primeira aba)"
+- Para **processos/metodologia**: "Vá em Processos (menu lateral)"
 
 ## Estilo de resposta:
 - Português brasileiro, direto e objetivo
@@ -69,10 +69,10 @@ const QUICK_ACTIONS = [
 ];
 
 const SHORTCUTS = [
-  { label: "Tarefas",  view: "tarefas"  as AppView },
-  { label: "Clientes", view: "clientes" as AppView },
-  { label: "Pipeline", view: "pipeline" as AppView },
-  { label: "Playbook", view: "playbook" as AppView },
+  { label: "Tarefas",   view: "tarefas"   as AppView },
+  { label: "Clientes",  view: "clientes"  as AppView },
+  { label: "Pipeline",  view: "pipeline"  as AppView },
+  { label: "Processos", view: "processos" as AppView },
 ];
 
 interface Message {

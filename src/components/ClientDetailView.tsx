@@ -2,13 +2,16 @@ import { useState, useRef, useEffect, useMemo } from "react"
 import {
   ArrowLeft, Globe, User, Phone, Mail, DollarSign, Tag,
   Plus, Check, Trash2, Brain, Send, Loader2, Sparkles,
-  BookOpen, X,
+  BookOpen, X, ListChecks, Calendar,
 } from "lucide-react"
 import type { Client } from "../lib/database.types"
 import { useClientKnowledge, type KnowledgeEntry } from "../hooks/useClientKnowledge"
+import { useClientChecklist } from "../hooks/useClientChecklist"
 import { useAuth } from "../hooks/useAuth"
 import { FLAG_META, STATUS_META } from "../lib/clientMeta"
 import { getGroqApiKey, GROQ_MODEL, GROQ_API_URL } from "../lib/groq"
+import { AdsMetricsTab } from "./ads/AdsMetricsTab"
+import { CompiladoTab } from "./ads/CompiladoTab"
 
 const SOURCE_META = {
   manual:       { label: "Manual", color: "#2563EB", bg: "#0a0f1a" },
@@ -16,7 +19,7 @@ const SOURCE_META = {
   web:          { label: "Web",    color: "#F59E0B", bg: "#1a1200" },
 }
 
-type Tab = "overview" | "knowledge" | "ai"
+type Tab = "overview" | "checklist" | "meta" | "google" | "compilado" | "knowledge" | "ai"
 
 interface ChatMessage { role: "user" | "assistant"; content: string }
 
@@ -342,9 +345,13 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
   const { profile } = useAuth()
   const [tab, setTab] = useState<Tab>("overview")
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showAddChecklist, setShowAddChecklist] = useState(false)
+  const [newItemTitle, setNewItemTitle] = useState("")
+  const [newItemCategory, setNewItemCategory] = useState("")
   const [suggesting, setSuggesting] = useState(false)
   const [suggestError, setSuggestError] = useState("")
   const { validated, pending, addEntry, validateEntry, deleteEntry } = useClientKnowledge(client.id)
+  const { items, done, toggleItem, addItem, deleteItem } = useClientChecklist(client.id)
 
   const flag = FLAG_META[client.health_flag]
   const status = STATUS_META[client.status]
@@ -398,10 +405,23 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
     }
   }
 
+  async function handleAddChecklistItem(e: React.FormEvent) {
+    e.preventDefault()
+    if (!newItemTitle.trim() || !profile) return
+    await addItem(newItemTitle.trim(), newItemCategory || null, profile.id)
+    setNewItemTitle("")
+    setNewItemCategory("")
+    setShowAddChecklist(false)
+  }
+
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: "overview",   label: "Visão Geral" },
-    { id: "knowledge",  label: `Base de Conhecimento${pending.length ? ` (${pending.length})` : ""}` },
-    { id: "ai",         label: "IA do Cliente" },
+    { id: "checklist",  label: `Checklist${items.length ? ` (${done.length}/${items.length})` : ""}` },
+    { id: "meta",       label: "Meta Ads" },
+    { id: "google",     label: "Google Ads" },
+    { id: "compilado",  label: "Compilado" },
+    { id: "knowledge",  label: `Conhecimento${pending.length ? ` (${pending.length})` : ""}` },
+    { id: "ai",         label: "IA" },
   ]
 
   return (
@@ -463,6 +483,9 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
             <Field label={<><Globe size={11} className="inline mr-1" />Website</>}         value={client.website && <a href={client.website} target="_blank" rel="noopener noreferrer" style={{ color: "#1FCE4A" }}>{client.website.replace(/^https?:\/\//, "")}</a>} />
             <Field label={<><Tag size={11} className="inline mr-1" />Segmento</>}          value={client.segment} />
             <Field label={<><DollarSign size={11} className="inline mr-1" />Mensalidade</>} value={client.monthly_fee && <span style={{ color: "#1FCE4A" }} className="font-medium">R$ {client.monthly_fee.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>} />
+            <Field label={<><Tag size={11} className="inline mr-1" />Tipo de serviço</>}   value={client.tipo_servico} />
+            <Field label="Origem do lead"      value={client.origem_lead} />
+            <Field label={<><Calendar size={11} className="inline mr-1" />Próxima reunião</>} value={client.proxima_reuniao && new Date(client.proxima_reuniao).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} />
             <Field label="Início do contrato" value={client.contract_start && new Date(client.contract_start).toLocaleDateString("pt-BR")} />
             {client.notes && (
               <div className="py-4" style={{ borderBottom: "1px solid #111" }}>
@@ -478,6 +501,128 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
             )}
           </div>
         )}
+
+        {tab === "checklist" && (
+          <div className="max-w-2xl space-y-4">
+            {/* Progress bar */}
+            {items.length > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-[11px]" style={{ color: "#555" }}>
+                  <span>{done.length} de {items.length} concluídos</span>
+                  <span>{Math.round((done.length / items.length) * 100)}%</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "#1a1a1a" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{ width: `${(done.length / items.length) * 100}%`, backgroundColor: "#1FCE4A" }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Add item form */}
+            {canEdit && !showAddChecklist && (
+              <button
+                onClick={() => setShowAddChecklist(true)}
+                className="flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg"
+                style={{ backgroundColor: "#1FCE4A", color: "#000" }}
+              >
+                <Plus size={13} />
+                Adicionar item
+              </button>
+            )}
+
+            {showAddChecklist && (
+              <form onSubmit={handleAddChecklistItem} className="flex gap-2 items-end">
+                <div className="flex-1 space-y-2">
+                  <input
+                    value={newItemTitle}
+                    onChange={(e) => setNewItemTitle(e.target.value)}
+                    placeholder="Título do item..."
+                    required
+                    autoFocus
+                    className="w-full rounded-lg px-3 py-2 text-sm text-white placeholder-[#333] focus:outline-none focus:border-[#1FCE4A44] transition-colors"
+                    style={{ backgroundColor: "#0d0d0d", border: "1px solid #1e1e1e" }}
+                  />
+                  <input
+                    value={newItemCategory}
+                    onChange={(e) => setNewItemCategory(e.target.value)}
+                    placeholder="Categoria (opcional)"
+                    className="w-full rounded-lg px-3 py-2 text-xs text-white placeholder-[#333] focus:outline-none focus:border-[#1FCE4A44] transition-colors"
+                    style={{ backgroundColor: "#0d0d0d", border: "1px solid #1e1e1e" }}
+                  />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <button type="submit" className="px-3 py-2 rounded-lg text-xs font-semibold" style={{ backgroundColor: "#1FCE4A", color: "#000" }}>
+                    Salvar
+                  </button>
+                  <button type="button" onClick={() => setShowAddChecklist(false)} className="px-3 py-2 rounded-lg text-xs border" style={{ borderColor: "#1e1e1e", color: "#555" }}>
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Items list */}
+            {items.length === 0 ? (
+              <div className="rounded-xl border border-[#1a1a1a] py-16 text-center" style={{ backgroundColor: "#0a0a0a" }}>
+                <ListChecks size={28} className="mx-auto mb-3" style={{ color: "#222" }} />
+                <p className="text-sm font-semibold text-white mb-1">Checklist vazio</p>
+                <p className="text-xs" style={{ color: "#444" }}>Adicione itens para acompanhar o progresso do cliente</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {items.map((item) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl group"
+                    style={{ backgroundColor: item.completed ? "#080808" : "#0d0d0d" }}
+                  >
+                    <button
+                      onClick={() => profile && toggleItem(item.id, profile.id)}
+                      className="w-5 h-5 rounded-md border flex-shrink-0 flex items-center justify-center transition-all"
+                      style={{
+                        backgroundColor: item.completed ? "#1FCE4A" : "transparent",
+                        borderColor: item.completed ? "#1FCE4A" : "#2a2a2a",
+                      }}
+                    >
+                      {item.completed && <Check size={11} color="#000" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm" style={{ color: item.completed ? "#444" : "#fff", textDecoration: item.completed ? "line-through" : "none" }}>
+                        {item.title}
+                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {item.category && (
+                          <span className="text-[10px] font-medium" style={{ color: "#555" }}>{item.category}</span>
+                        )}
+                        {item.completed_at && (
+                          <span className="text-[10px] flex items-center gap-1" style={{ color: "#333" }}>
+                            <Calendar size={9} />
+                            {new Date(item.completed_at).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <button
+                        onClick={() => deleteItem(item.id)}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all hover:text-red-500"
+                        style={{ color: "#333" }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "meta"      && <AdsMetricsTab clientId={client.id} platform="meta" />}
+        {tab === "google"    && <AdsMetricsTab clientId={client.id} platform="google" />}
+        {tab === "compilado" && <CompiladoTab clientId={client.id} />}
 
         {tab === "knowledge" && (
           <div className="max-w-2xl space-y-6">

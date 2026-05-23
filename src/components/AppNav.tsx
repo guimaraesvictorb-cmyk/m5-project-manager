@@ -1,6 +1,7 @@
 import {
   Sparkles, LayoutDashboard, CheckSquare, Users, DollarSign,
-  TrendingUp, BookOpen, Building2, UserCircle, LogOut, ShieldCheck, ChevronRight
+  TrendingUp, BookOpen, Building2, UserCircle, LogOut, ShieldCheck,
+  ChevronRight, Settings, Link2,
 } from "lucide-react";
 import type { Profile } from "../lib/database.types";
 
@@ -9,8 +10,9 @@ export type AppView =
   | "tarefas" | "clientes"
   | "financeiro"
   | "pipeline"
-  | "playbook" | "central"
-  | "profile";
+  | "processos" | "central"
+  | "rastreamento"
+  | "profile" | "settings";
 
 interface NavItem { view: AppView; label: string; icon: React.ReactNode }
 interface NavGroup { label?: string; items: NavItem[] }
@@ -42,8 +44,9 @@ const NAV: NavGroup[] = [
   },
   {
     items: [
-      { view: "playbook", label: "Playbook", icon: <BookOpen size={15} /> },
-      { view: "central",  label: "Central",  icon: <Building2 size={15} /> },
+      { view: "processos",    label: "Processos",    icon: <BookOpen size={15} /> },
+      { view: "central",      label: "Central",      icon: <Building2 size={15} /> },
+      { view: "rastreamento", label: "Rastreamento", icon: <Link2 size={15} /> },
     ],
   },
 ];
@@ -85,10 +88,7 @@ export function AppNav({ active, onChange, profile, onLogout }: AppNavProps) {
         {NAV.map((group, gi) => (
           <div key={gi}>
             {group.label && (
-              <p
-                className="text-[9px] font-bold tracking-widest uppercase px-2 mb-1.5"
-                style={{ color: "#333" }}
-              >
+              <p className="text-[9px] font-bold tracking-widest uppercase px-2 mb-1.5" style={{ color: "#333" }}>
                 {group.label}
               </p>
             )}
@@ -132,7 +132,7 @@ export function AppNav({ active, onChange, profile, onLogout }: AppNavProps) {
       </nav>
 
       {/* User section */}
-      <div className="flex-shrink-0 px-3 pb-4 pt-3 space-y-1" style={{ borderTop: "1px solid #111" }}>
+      <div className="flex-shrink-0 px-3 pb-4 pt-3 space-y-0.5" style={{ borderTop: "1px solid #111" }}>
         <button
           onClick={() => onChange("profile")}
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left transition-all duration-100 focus:outline-none"
@@ -154,7 +154,7 @@ export function AppNav({ active, onChange, profile, onLogout }: AppNavProps) {
           }}
         >
           <UserCircle size={15} style={{ color: active === "profile" ? "#1FCE4A" : "inherit", flexShrink: 0 }} />
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <p className="text-xs font-medium leading-tight truncate" style={{ color: "inherit" }}>
               {profile?.display_name ?? "Meu perfil"}
             </p>
@@ -165,7 +165,39 @@ export function AppNav({ active, onChange, profile, onLogout }: AppNavProps) {
               </p>
             </div>
           </div>
+          {active === "profile" && (
+            <ChevronRight size={11} className="flex-shrink-0" style={{ color: "#1FCE4A" }} />
+          )}
         </button>
+
+        {(profile?.role === "admin" || profile?.role === "coordenador") && (
+          <button
+            onClick={() => onChange("settings")}
+            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-left text-xs transition-all duration-100 focus:outline-none"
+            style={{
+              backgroundColor: active === "settings" ? "#0d1f14" : "transparent",
+              color: active === "settings" ? "#fff" : "#555",
+            }}
+            onMouseEnter={(e) => {
+              if (active !== "settings") {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "#0a0a0a";
+                (e.currentTarget as HTMLButtonElement).style.color = "#A3A3A3";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (active !== "settings") {
+                (e.currentTarget as HTMLButtonElement).style.backgroundColor = "transparent";
+                (e.currentTarget as HTMLButtonElement).style.color = "#555";
+              }
+            }}
+          >
+            <Settings size={13} style={{ color: active === "settings" ? "#1FCE4A" : "inherit" }} />
+            Configurações
+            {active === "settings" && (
+              <ChevronRight size={11} className="ml-auto flex-shrink-0" style={{ color: "#1FCE4A" }} />
+            )}
+          </button>
+        )}
 
         <button
           onClick={onLogout}

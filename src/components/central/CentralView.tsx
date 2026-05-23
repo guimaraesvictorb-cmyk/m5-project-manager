@@ -5,13 +5,14 @@ import {
   Users2, Lock,
 } from "lucide-react";
 import { ProcessosView } from "./ProcessosView";
+import { ProcessosClienteView } from "./ProcessosClienteView";
 import { ClientesSection } from "../ClientesSection";
 import { Footer } from "../Footer";
 
 type SectionId = "pp" | "cs" | "ops" | "criativos" | "tech" | "financeiro" | "comercial" | "clientes";
 type ItemId =
   | "ops-projetos" | "ops-processos" | "ops-links" | "ops-reunioes"
-  | "cs-churn" | "cs-jornada"
+  | "cs-churn" | "cs-jornada" | "cs-processos"
   | "pp-main"
   | "clientes-carteira";
 
@@ -46,8 +47,9 @@ const SECTIONS: SidebarSection[] = [
     icon: <Heart size={14} />,
     color: "#EC4899",
     items: [
-      { id: "cs-churn", label: "Dossiê do Churn", icon: <FolderOpen size={12} /> },
-      { id: "cs-jornada", label: "Jornada do Cliente", icon: <List size={12} /> },
+      { id: "cs-churn",     label: "Dossiê do Churn",       icon: <FolderOpen size={12} /> },
+      { id: "cs-jornada",   label: "Jornada do Cliente",     icon: <List size={12} /> },
+      { id: "cs-processos", label: "Processos de Cliente",   icon: <List size={12} /> },
     ],
   },
   {
@@ -115,7 +117,7 @@ const SECTIONS: SidebarSection[] = [
   },
 ];
 
-const IMPLEMENTED: ItemId[] = ["ops-processos", "clientes-carteira"];
+const IMPLEMENTED: ItemId[] = ["ops-processos", "clientes-carteira", "cs-processos"];
 
 function PlaceholderContent({ label }: { label: string }) {
   return (
@@ -158,6 +160,7 @@ export function CentralView() {
   function renderContent() {
     if (activeItem === "ops-processos") return <ProcessosView />;
     if (activeItem === "clientes-carteira") return <ClientesSection />;
+    if (activeItem === "cs-processos") return <ProcessosClienteView />;
     return <PlaceholderContent label={activeItemLabel} />;
   }
 

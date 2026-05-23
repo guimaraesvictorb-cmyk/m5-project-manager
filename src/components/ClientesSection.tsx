@@ -115,7 +115,11 @@ function ClientCard({ client, onHealthChange, onSelect }: { client: Client; onHe
 
 // Modal de criação de cliente
 function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (data: Partial<Client>) => Promise<void> }) {
-  const [form, setForm] = useState({ name: "", segment: "", monthly_fee: "", primary_contact_name: "", website: "" });
+  const [form, setForm] = useState({
+    name: "", segment: "", monthly_fee: "", primary_contact_name: "",
+    primary_contact_email: "", primary_contact_phone: "",
+    website: "", tipo_servico: "", origem_lead: "", proxima_reuniao: "",
+  });
   const [saving, setSaving] = useState(false);
 
   function slug(name: string) {
@@ -131,7 +135,12 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
       segment: form.segment || null,
       monthly_fee: form.monthly_fee ? parseFloat(form.monthly_fee) : null,
       primary_contact_name: form.primary_contact_name || null,
+      primary_contact_email: form.primary_contact_email || null,
+      primary_contact_phone: form.primary_contact_phone || null,
       website: form.website || null,
+      tipo_servico: form.tipo_servico || null,
+      origem_lead: form.origem_lead || null,
+      proxima_reuniao: form.proxima_reuniao || null,
       status: "ativo",
       health_flag: "green",
     });
@@ -155,9 +164,14 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
           {[
             { key: "name", label: "Nome *", placeholder: "Nome da empresa", required: true },
             { key: "segment", label: "Segmento", placeholder: "ecommerce, saas, serviços..." },
+            { key: "tipo_servico", label: "Tipo de serviço", placeholder: "Tráfego pago, Social media..." },
             { key: "monthly_fee", label: "Mensalidade (R$)", placeholder: "5000", type: "number" },
             { key: "primary_contact_name", label: "Contato principal", placeholder: "Nome do responsável" },
+            { key: "primary_contact_email", label: "E-mail do contato", placeholder: "email@empresa.com", type: "email" },
+            { key: "primary_contact_phone", label: "Telefone do contato", placeholder: "(11) 99999-9999" },
             { key: "website", label: "Website", placeholder: "https://..." },
+            { key: "origem_lead", label: "Origem do lead", placeholder: "Indicação, Instagram, Google..." },
+            { key: "proxima_reuniao", label: "Próxima reunião", placeholder: "", type: "datetime-local" },
           ].map(({ key, label, placeholder, required, type }) => (
             <div key={key} className="space-y-1">
               <label className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "#555" }}>{label}</label>
