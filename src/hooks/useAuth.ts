@@ -38,14 +38,11 @@ export function useAuth() {
       setState((s) => s.isLoading ? { ...s, isLoading: false } : s)
     }, 6000)
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       clearTimeout(timeout)
       if (session) {
-        // Autentica imediatamente, busca perfil em paralelo sem bloquear
-        setState({ user: session.user, session, profile: null, isAuthenticated: true, isLoading: false })
-        fetchProfile(session.user.id).then((profile) => {
-          if (profile) setState((s) => ({ ...s, profile }))
-        })
+        const profile = await fetchProfile(session.user.id)
+        setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
       } else {
         setState((s) => ({ ...s, isLoading: false }))
       }
@@ -57,10 +54,8 @@ export function useAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       clearTimeout(timeout)
       if (session) {
-        setState({ user: session.user, session, profile: null, isAuthenticated: true, isLoading: false })
-        fetchProfile(session.user.id).then((profile) => {
-          if (profile) setState((s) => ({ ...s, profile }))
-        })
+        const profile = await fetchProfile(session.user.id)
+        setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
       } else {
         setState({ user: null, session: null, profile: null, isAuthenticated: false, isLoading: false })
       }
