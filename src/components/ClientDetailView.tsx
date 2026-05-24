@@ -13,6 +13,7 @@ import { FLAG_META, STATUS_META } from "../lib/clientMeta"
 import { getGroqApiKey, GROQ_MODEL, GROQ_API_URL } from "../lib/groq"
 import { AdsMetricsTab } from "./ads/AdsMetricsTab"
 import { CompiladoTab } from "./ads/CompiladoTab"
+import { MetaAdsLiveTab } from "./ads/MetaAdsLiveTab"
 
 const SOURCE_META = {
   manual:       { label: "Manual", color: "#2563EB", bg: "#0a0f1a" },
@@ -674,7 +675,7 @@ export function ClientDetailView({ client, onBack }: ClientDetailViewProps) {
           </div>
         )}
 
-        {tab === "meta"      && <AdsMetricsTab clientId={client.id} platform="meta" />}
+        {tab === "meta"      && <MetaAdsLiveTab client={client} />}
         {tab === "google"    && <AdsMetricsTab clientId={client.id} platform="google" />}
         {tab === "compilado" && <CompiladoTab clientId={client.id} />}
 
