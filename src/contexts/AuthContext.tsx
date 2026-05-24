@@ -16,20 +16,16 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null)
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle()
-      if (data) return data
-      if (error) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
-    } catch {
-      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
-    }
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle()
+    return data ?? null
+  } catch {
+    return null
   }
-  return null
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -42,15 +38,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   })
 
   useEffect(() => {
+    // Fallback: desbloqueia o app em 4 segundos no máximo
     const timeout = setTimeout(() => {
       setState((s) => s.isLoading ? { ...s, isLoading: false } : s)
-    }, 6000)
+    }, 4000)
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       clearTimeout(timeout)
       if (session) {
-        const profile = await fetchProfile(session.user.id)
-        setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
+        // Autentica imediatamente, perfil carrega em background
+        setState({ user: session.user, session, profile: null, isAuthenticated: true, isLoading: false })
+        fetchProfile(session.user.id).then((profile) => {
+          if (profile) setState((s) => ({ ...s, profile }))
+        })
       } else {
         setState((s) => ({ ...s, isLoading: false }))
       }
@@ -59,10 +59,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setState((s) => ({ ...s, isLoading: false }))
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      clearTimeout(timeout)
       if (session) {
-        const profile = await fetchProfile(session.user.id)
-        setState({ user: session.user, session, profile, isAuthenticated: true, isLoading: false })
+        setState((s) => ({
+          ...s,
+          user: session.user,
+          session,
+          isAuthenticated: true,
+          isLoading: false,
+        }))
+        fetchProfile(session.user.id).then((profile) => {
+          if (profile) setState((s) => ({ ...s, profile }))
+        })
       } else {
         setState({ user: null, session: null, profile: null, isAuthenticated: false, isLoading: false })
       }
