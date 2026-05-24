@@ -3,11 +3,14 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { SharedDashboardPage } from './components/SharedDashboardPage.tsx'
+import { AuthProvider } from './contexts/AuthContext.tsx'
 
 const shareToken = new URLSearchParams(window.location.search).get('share')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {shareToken ? <SharedDashboardPage token={shareToken} /> : <App />}
+    <AuthProvider>
+      {shareToken ? <SharedDashboardPage token={shareToken} /> : <App />}
+    </AuthProvider>
   </StrictMode>,
 )
