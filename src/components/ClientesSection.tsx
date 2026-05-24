@@ -133,28 +133,33 @@ function NewClientModal({ onClose, onSave }: { onClose: () => void; onSave: (dat
     e.preventDefault();
     setSaving(true);
     setSaveError("");
-    const err = await onSave({
-      name: form.name,
-      slug: makeSlug(form.name),
-      segment: form.segment || null,
-      monthly_fee: form.monthly_fee ? parseFloat(form.monthly_fee) : null,
-      monthly_investment: form.monthly_investment ? parseFloat(form.monthly_investment) : null,
-      primary_contact_name: form.primary_contact_name || null,
-      primary_contact_email: form.primary_contact_email || null,
-      primary_contact_phone: form.primary_contact_phone || null,
-      website: form.website || null,
-      tipo_servico: form.tipo_servico || null,
-      origem_lead: form.origem_lead || null,
-      proxima_reuniao: form.proxima_reuniao || null,
-      contract_start: form.contract_start || null,
-      contract_end: form.contract_end || null,
-      notes: form.notes || null,
-      status: form.status as Client["status"],
-      health_flag: "green",
-    });
-    setSaving(false);
-    if (err) { setSaveError(err); return; }
-    onClose();
+    try {
+      const err = await onSave({
+        name: form.name,
+        slug: makeSlug(form.name),
+        segment: form.segment || null,
+        monthly_fee: form.monthly_fee ? parseFloat(form.monthly_fee) : null,
+        monthly_investment: form.monthly_investment ? parseFloat(form.monthly_investment) : null,
+        primary_contact_name: form.primary_contact_name || null,
+        primary_contact_email: form.primary_contact_email || null,
+        primary_contact_phone: form.primary_contact_phone || null,
+        website: form.website || null,
+        tipo_servico: form.tipo_servico || null,
+        origem_lead: form.origem_lead || null,
+        proxima_reuniao: form.proxima_reuniao || null,
+        contract_start: form.contract_start || null,
+        contract_end: form.contract_end || null,
+        notes: form.notes || null,
+        status: form.status as Client["status"],
+        health_flag: "green",
+      });
+      if (err) { setSaveError(err); return; }
+      onClose();
+    } catch (ex: unknown) {
+      setSaveError((ex as Error).message ?? "Erro desconhecido");
+    } finally {
+      setSaving(false);
+    }
   }
 
   const inp = "w-full rounded-lg px-3 py-2 text-sm text-white placeholder-[#333] focus:outline-none transition-colors";
@@ -310,7 +315,8 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
 
   async function handleCreate(data: Partial<Client>): Promise<string | undefined> {
     if (!profile) return "Usuário não autenticado";
-    const result = await createClient({ ...data, created_by: profile.id } as never);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await createClient({ ...data, created_by: profile.id } as any);
     return result?.error;
   }
 

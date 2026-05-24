@@ -23,9 +23,24 @@ import { LeadsCapturadosView } from "./components/LeadsCapturadosView";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { Loader2 } from "lucide-react";
 
+const VIEW_KEY = "m5os_view";
+
 function App() {
   const { user, profile, isAuthenticated, isLoading, logout } = useAuth();
-  const [view, setView] = useState<AppView>("home");
+  const [view, setView] = useState<AppView>(() => {
+    const saved = localStorage.getItem(VIEW_KEY) as AppView | null;
+    const valid: AppView[] = [
+      "home","dashboard","tarefas","clientes","financeiro","pipeline","processos",
+      "central","rastreamento","super-agente","copy-ia","relatorios","whatsapp",
+      "integracoes","leads-capturados","profile","settings",
+    ];
+    return saved && valid.includes(saved) ? saved : "home";
+  });
+
+  function navigate(v: AppView) {
+    localStorage.setItem(VIEW_KEY, v);
+    setView(v);
+  }
 
   if (isLoading) {
     return (
@@ -42,10 +57,10 @@ function App() {
   return (
     <ThemeProvider>
       <div className="flex h-screen bg-black text-white font-sans overflow-hidden">
-        <AppNav active={view} onChange={setView} profile={profile} onLogout={logout} />
+        <AppNav active={view} onChange={navigate} profile={profile} onLogout={logout} />
 
         <main className="flex-1 overflow-y-auto min-h-0">
-          {view === "home"       && <HomeView profile={profile} onNavigate={setView} />}
+          {view === "home"       && <HomeView profile={profile} onNavigate={navigate} />}
           {view === "dashboard"  && <DashboardView />}
           {view === "tarefas"    && <TarefasView />}
           {view === "clientes"   && <ClientesView />}
