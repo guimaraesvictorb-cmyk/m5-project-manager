@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { MessageSquare, Settings, X, Send, Loader2, Check, Users, Phone, AlertCircle } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { MessageSquare, Settings, X, Send, Loader2, Check, Users, Phone, AlertCircle, Wifi, RefreshCw } from "lucide-react";
 import { useClients } from "../hooks/useClients";
 import { Footer } from "./Footer";
 
@@ -38,6 +38,8 @@ const TEMPLATES = [
   },
 ];
 
+type ConnectStep = "form" | "qr" | "connected"
+
 interface ConfigModalProps {
   onClose: () => void;
   onSave: () => void;
@@ -47,85 +49,195 @@ function ConfigModal({ onClose, onSave }: ConfigModalProps) {
   const cfg = getConfig();
   const [url, setUrl] = useState(cfg.url);
   const [key, setKey] = useState(cfg.apiKey);
-  const [instance, setInstance] = useState(cfg.instance);
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<"ok" | "fail" | null>(null);
+  const [instance, setInstance] = useState(cfg.instance || "m5-marketing");
+  const [step, setStep] = useState<ConnectStep>("form");
+  const [loading, setLoading] = useState(false);
+  const [qrCode, setQrCode] = useState("");
+  const [error, setError] = useState("");
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  function save() {
-    localStorage.setItem(WA_URL_KEY, url.replace(/\/$/, ""));
-    localStorage.setItem(WA_KEY_KEY, key);
-    localStorage.setItem(WA_INST_KEY, instance);
-    onSave();
-    onClose();
+  const base = url.replace(/\/$/, "");
+  const headers = { apikey: key, "Content-Type": "application/json" };
+
+  function stopPolling() {
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
   }
 
-  async function testConnection() {
-    if (!url || !key || !instance) return;
-    setTesting(true);
-    setTestResult(null);
+  useEffect(() => () => stopPolling(), []);
+
+  async function checkState(): Promise<string> {
     try {
-      const base = url.replace(/\/$/, "");
-      const res = await fetch(`${base}/instance/fetchInstances`, {
-        headers: { apikey: key },
-      });
-      setTestResult(res.ok ? "ok" : "fail");
+      const res = await fetch(`${base}/instance/connectionState/${instance}`, { headers });
+      if (!res.ok) return "unknown";
+      const data = await res.json();
+      return data?.instance?.state ?? data?.state ?? "unknown";
     } catch {
-      setTestResult("fail");
-    } finally {
-      setTesting(false);
+      return "unknown";
     }
   }
 
-  const inp = "w-full rounded-lg px-3 py-2 text-xs text-white placeholder-[#333] focus:outline-none transition-colors";
+  async function fetchQr() {
+    try {
+      const res = await fetch(`${base}/instance/connect/${instance}`, { headers });
+      if (!res.ok) return;
+      const data = await res.json();
+      const b64 = data?.base64 ?? data?.qrcode?.base64 ?? "";
+      if (b64) setQrCode(b64.startsWith("data:") ? b64 : `data:image/png;base64,${b64}`);
+    } catch { /* silent */ }
+  }
+
+  function saveAndClose() {
+    stopPolling();
+    localStorage.setItem(WA_URL_KEY, base);
+    localStorage.setItem(WA_KEY_KEY, key);
+    localStorage.setItem(WA_INST_KEY, instance);
+    onSave();
+    setStep("connected");
+    setTimeout(() => { onClose(); }, 1800);
+  }
+
+  function startPolling() {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      const state = await checkState();
+      if (state === "open") { saveAndClose(); return; }
+      // Refresh QR every 30s if still not connected
+      await fetchQr();
+    }, 5000);
+  }
+
+  async function connect() {
+    if (!url || !key || !instance) return;
+    setLoading(true);
+    setError("");
+    try {
+      // 1. Check if already connected
+      const state = await checkState();
+      if (state === "open") { saveAndClose(); return; }
+
+      // 2. Try to create instance (idempotent — ok if already exists)
+      await fetch(`${base}/instance/create`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ instanceName: instance, qrcode: true, integration: "WHATSAPP-BAILEYS" }),
+      });
+
+      // 3. Get QR code
+      await fetchQr();
+      setStep("qr");
+      startPolling();
+    } catch (e: unknown) {
+      setError((e as Error).message || "Não foi possível conectar. Verifique a URL e a chave API.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const inp = "w-full rounded-lg px-3 py-2 text-xs text-white placeholder-[#333] focus:outline-none";
   const inpStyle = { backgroundColor: "#0d0d0d", border: "1px solid #1e1e1e" };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.8)" }}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.85)" }}>
       <div className="rounded-2xl border w-full max-w-md" style={{ backgroundColor: "#0a0a0a", borderColor: "#1a1a1a" }}>
         <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: "#1a1a1a" }}>
-          <p className="text-sm font-semibold text-white">Configurar Evolution API</p>
-          <button onClick={onClose}><X size={16} style={{ color: "#555" }} /></button>
+          <p className="text-sm font-semibold text-white">Conectar WhatsApp</p>
+          <button onClick={() => { stopPolling(); onClose(); }}><X size={16} style={{ color: "#555" }} /></button>
         </div>
-        <div className="px-6 py-5 space-y-4">
-          <div className="rounded-xl px-4 py-3 text-xs space-y-1" style={{ backgroundColor: "#0d1a0d", border: "1px solid #1FCE4A22" }}>
-            <p className="font-bold" style={{ color: "#1FCE4A" }}>Como configurar gratuitamente:</p>
-            <p style={{ color: "#555" }}>1. Acesse <strong className="text-white">evolution-api.com</strong> e faça deploy gratuito no Railway/Render</p>
-            <p style={{ color: "#555" }}>2. Crie uma instância e conecte seu WhatsApp</p>
-            <p style={{ color: "#555" }}>3. Cole a URL e a chave API abaixo</p>
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#555" }}>URL da API *</label>
-            <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://sua-api.railway.app" className={inp} style={inpStyle} />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#555" }}>Chave API (Global API Key) *</label>
-            <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="sua-chave-api" type="password" className={inp} style={inpStyle} />
-          </div>
-          <div>
-            <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#555" }}>Nome da instância *</label>
-            <input value={instance} onChange={(e) => setInstance(e.target.value)} placeholder="m5-marketing" className={inp} style={inpStyle} />
-          </div>
 
-          {testResult === "ok" && (
-            <p className="text-xs flex items-center gap-1.5" style={{ color: "#1FCE4A" }}><Check size={12} />Conexão bem-sucedida!</p>
-          )}
-          {testResult === "fail" && (
-            <p className="text-xs flex items-center gap-1.5" style={{ color: "#EF4444" }}><AlertCircle size={12} />Falha na conexão. Verifique URL e chave.</p>
-          )}
-
-          <div className="flex gap-2 pt-1">
-            <button onClick={testConnection} disabled={testing || !url || !key}
-              className="flex-1 py-2 rounded-xl text-xs font-semibold border transition-all disabled:opacity-40"
-              style={{ borderColor: "#1e1e1e", color: "#555" }}>
-              {testing ? <Loader2 size={12} className="animate-spin mx-auto" /> : "Testar conexão"}
-            </button>
-            <button onClick={save} disabled={!url || !key || !instance}
-              className="flex-1 py-2 rounded-xl text-xs font-semibold transition-all disabled:opacity-40"
-              style={{ backgroundColor: "#1FCE4A", color: "#000" }}>
-              Salvar
+        {/* ── Step: form ── */}
+        {step === "form" && (
+          <div className="px-6 py-5 space-y-4">
+            <div className="rounded-xl px-4 py-3 text-xs space-y-1" style={{ backgroundColor: "#0d1a0d", border: "1px solid #1FCE4A22" }}>
+              <p className="font-bold" style={{ color: "#1FCE4A" }}>Pré-requisito: Evolution API no ar</p>
+              <p style={{ color: "#777" }}>Acesse <strong className="text-white">evolution-api.com</strong> e faça deploy gratuito no Railway ou Render. Depois cole a URL e a chave abaixo.</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#555" }}>URL da API *</label>
+              <input
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://sua-evolution.railway.app"
+                className={inp}
+                style={inpStyle}
+              />
+              <p className="text-[10px] mt-1" style={{ color: "#333" }}>Não é e-mail — é a URL do seu servidor Evolution API</p>
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#555" }}>Chave API (Global API Key) *</label>
+              <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="sua-chave-secreta" type="password" className={inp} style={inpStyle} />
+            </div>
+            <div>
+              <label className="text-[10px] font-bold uppercase tracking-widest block mb-1" style={{ color: "#555" }}>Nome da instância *</label>
+              <input value={instance} onChange={(e) => setInstance(e.target.value)} placeholder="m5-marketing" className={inp} style={inpStyle} />
+              <p className="text-[10px] mt-1" style={{ color: "#333" }}>Identificador da sua instância WhatsApp (sem espaços)</p>
+            </div>
+            {error && (
+              <p className="text-xs flex items-center gap-1.5" style={{ color: "#EF4444" }}>
+                <AlertCircle size={12} />{error}
+              </p>
+            )}
+            <button
+              onClick={connect}
+              disabled={loading || !url || !key || !instance}
+              className="w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all disabled:opacity-40"
+              style={{ backgroundColor: "#1FCE4A", color: "#000" }}
+            >
+              {loading ? <Loader2 size={14} className="animate-spin" /> : <Wifi size={14} />}
+              {loading ? "Conectando..." : "Conectar WhatsApp"}
             </button>
           </div>
-        </div>
+        )}
+
+        {/* ── Step: QR ── */}
+        {step === "qr" && (
+          <div className="px-6 py-6 flex flex-col items-center gap-4 text-center">
+            <div className="flex items-center gap-1.5 text-xs" style={{ color: "#1FCE4A" }}>
+              <Loader2 size={12} className="animate-spin" />
+              Aguardando leitura do QR Code...
+            </div>
+            {qrCode ? (
+              <div className="rounded-xl overflow-hidden border" style={{ borderColor: "#1e1e1e" }}>
+                <img src={qrCode} alt="QR Code WhatsApp" className="w-56 h-56 object-contain" style={{ backgroundColor: "#fff" }} />
+              </div>
+            ) : (
+              <div className="w-56 h-56 rounded-xl flex items-center justify-center" style={{ backgroundColor: "#0d0d0d", border: "1px solid #1e1e1e" }}>
+                <Loader2 size={24} className="animate-spin" style={{ color: "#333" }} />
+              </div>
+            )}
+            <div className="text-xs space-y-1" style={{ color: "#555" }}>
+              <p>1. Abra o WhatsApp no celular</p>
+              <p>2. Vá em <strong className="text-white">Dispositivos conectados → Conectar dispositivo</strong></p>
+              <p>3. Aponte a câmera para o QR Code acima</p>
+            </div>
+            <div className="flex gap-2 w-full">
+              <button
+                onClick={() => { stopPolling(); setStep("form"); setQrCode(""); }}
+                className="flex-1 py-2 rounded-xl text-xs border"
+                style={{ borderColor: "#1e1e1e", color: "#555" }}
+              >
+                Voltar
+              </button>
+              <button
+                onClick={fetchQr}
+                className="flex-1 py-2 rounded-xl text-xs flex items-center justify-center gap-1 border"
+                style={{ borderColor: "#1e1e1e", color: "#555" }}
+              >
+                <RefreshCw size={11} /> Novo QR
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Step: connected ── */}
+        {step === "connected" && (
+          <div className="px-6 py-10 flex flex-col items-center gap-3 text-center">
+            <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ backgroundColor: "#0d1f0d", border: "1px solid #1FCE4A44" }}>
+              <Check size={26} style={{ color: "#1FCE4A" }} />
+            </div>
+            <p className="text-sm font-bold text-white">WhatsApp conectado!</p>
+            <p className="text-xs" style={{ color: "#555" }}>Configuração salva. Você já pode enviar mensagens.</p>
+          </div>
+        )}
       </div>
     </div>
   );
