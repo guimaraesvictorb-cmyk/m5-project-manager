@@ -1,119 +1,113 @@
 import { useState, useCallback, useEffect } from 'react'
-import { RefreshCw, Loader2, Play, Pause, AlertCircle, Settings2, Check, ChevronDown } from 'lucide-react'
+import {
+  RefreshCw, Loader2, AlertCircle, Info, Eye, EyeOff,
+  ChevronDown, Search, Download, BarChart2, Target,
+  Play, Pause, FileText, Users, Heart, DollarSign,
+  MousePointer, Activity, MessageSquare, Percent,
+  Calendar, TrendingUp, Settings, Check,
+  Plus, Wallet,
+} from 'lucide-react'
 import type { Client } from '../../lib/database.types'
-import { fmtCurrency, fmt, fmtPct } from '../../lib/formatters'
+import { fmtCurrency, fmtPct, fmtInt } from '../../lib/formatters'
+
+// ─── constants ───────────────────────────────────────────────────────────────
 
 const META_STORAGE_KEY = 'm5os_meta_token'
 const META_GRAPH = 'https://graph.facebook.com/v18.0'
+const BLUE = '#1877F2'
+const CARD_BG = '#0f1220'
+const BORDER = '#1c2535'
+const SECTION_BG = '#0b0e17'
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
+interface AccountMetrics {
+  spend: number; conversations: number; costPerConversation: number
+  impressions: number; reach: number; clicks: number
+  inlineLinkClicks: number; ctr: number; inlineLinkClickCtr: number
+  cpm: number; cpc: number; cpcLink: number; frequency: number
+  pageEngagement: number; results: number; costPerResult: number
+}
+
 interface CampaignRow {
-  id: string
-  name: string
-  status: string
-  objective: string
-  spend: number
-  purchaseValue: number
-  roas: number
-  cpa: number
-  ticketMedio: number
-  addToCart: number
-  purchases: number
-  conversations: number
-  costPerConversation: number
-  leads: number
-  costPerLead: number
-  impressions: number
-  reach: number
-  clicks: number
-  inlineLinkClicks: number
-  ctr: number
-  inlineLinkClickCtr: number
-  cpm: number
-  cpc: number
-  cpcLink: number
-  videoViews: number
-  frequency: number
-  pageEngagement: number
-  results: number
-  costPerResult: number
+  id: string; name: string; status: string; objective: string
+  startTime: string; dailyBudget: number; lifetimeBudget: number
+  spend: number; clicks: number; inlineLinkClicks: number
+  ctr: number; inlineLinkClickCtr: number; cpm: number; cpc: number
+  cpcLink: number; impressions: number; reach: number
+  frequency: number; results: number; costPerResult: number
 }
 
-// ─── columns definition ───────────────────────────────────────────────────────
+interface DailyPoint { date: string; spend: number; impressions: number; clicks: number }
 
-type ColKey = keyof Omit<CampaignRow, 'id' | 'name' | 'status' | 'objective'>
-type ColFormat = 'currency' | 'number' | 'pct' | 'decimal'
+// ─── date helpers ─────────────────────────────────────────────────────────────
 
-const COLUMNS: { key: ColKey; label: string; fmt: ColFormat }[] = [
-  { key: 'spend',                label: 'Investimento',             fmt: 'currency' },
-  { key: 'purchaseValue',        label: 'Valor em Compras',         fmt: 'currency' },
-  { key: 'roas',                 label: 'ROAS',                     fmt: 'decimal'  },
-  { key: 'cpa',                  label: 'CPA Médio',                fmt: 'currency' },
-  { key: 'ticketMedio',          label: 'Ticket Médio',             fmt: 'currency' },
-  { key: 'addToCart',            label: 'Adições ao carrinho',      fmt: 'number'   },
-  { key: 'purchases',            label: 'Compras',                  fmt: 'number'   },
-  { key: 'conversations',        label: 'Conversas',                fmt: 'number'   },
-  { key: 'costPerConversation',  label: 'Custo por Conversa',       fmt: 'currency' },
-  { key: 'leads',                label: 'Leads',                    fmt: 'number'   },
-  { key: 'costPerLead',          label: 'Custo por Lead',           fmt: 'currency' },
-  { key: 'impressions',          label: 'Impressões',               fmt: 'number'   },
-  { key: 'reach',                label: 'Alcance',                  fmt: 'number'   },
-  { key: 'clicks',               label: 'Cliques',                  fmt: 'number'   },
-  { key: 'inlineLinkClicks',     label: 'Cliques no link',          fmt: 'number'   },
-  { key: 'ctr',                  label: 'CTR (Todos)',              fmt: 'pct'      },
-  { key: 'inlineLinkClickCtr',   label: 'CTR (Link)',               fmt: 'pct'      },
-  { key: 'cpm',                  label: 'CPM Médio',                fmt: 'currency' },
-  { key: 'cpc',                  label: 'CPC Médio',                fmt: 'currency' },
-  { key: 'cpcLink',              label: 'CPC Médio (Link)',         fmt: 'currency' },
-  { key: 'videoViews',           label: 'Visualizações',            fmt: 'number'   },
-  { key: 'frequency',            label: 'Frequência',               fmt: 'decimal'  },
-  { key: 'pageEngagement',       label: 'Engajamento da página',    fmt: 'number'   },
-  { key: 'results',              label: 'Resultados',               fmt: 'number'   },
-  { key: 'costPerResult',        label: 'Custo por Resultado',      fmt: 'currency' },
-]
-
-const DEFAULT_COLS: ColKey[] = [
-  'spend', 'results', 'costPerResult', 'roas', 'impressions', 'clicks', 'ctr', 'cpm',
-]
-
-// ─── periods ─────────────────────────────────────────────────────────────────
-
-function periodRange(p: string): { since: string; until: string } {
-  const now = new Date()
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const fmt = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-  if (p === 'month') {
-    const s = new Date(now.getFullYear(), now.getMonth(), 1)
-    return { since: fmt(s), until: fmt(now) }
-  }
-  if (p === 'last_month') {
-    const s = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-    const e = new Date(now.getFullYear(), now.getMonth(), 0)
-    return { since: fmt(s), until: fmt(e) }
-  }
-  if (p === '7d') {
-    const s = new Date(now); s.setDate(now.getDate() - 6)
-    return { since: fmt(s), until: fmt(now) }
-  }
-  // 30d default
-  const s = new Date(now); s.setDate(now.getDate() - 29)
-  return { since: fmt(s), until: fmt(now) }
+function isoDate(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
+function today() { return isoDate(new Date()) }
+function addDays(d: Date, n: number) { const r = new Date(d); r.setDate(r.getDate() + n); return r }
 
 const PERIODS = [
-  { value: 'month',      label: 'Este mês' },
-  { value: 'last_month', label: 'Mês passado' },
-  { value: '7d',         label: 'Últimos 7 dias' },
-  { value: '30d',        label: 'Últimos 30 dias' },
+  {
+    label: 'Hoje',
+    since: () => today(),
+    until: () => today(),
+  },
+  {
+    label: 'Ontem',
+    since: () => isoDate(addDays(new Date(), -1)),
+    until: () => isoDate(addDays(new Date(), -1)),
+  },
+  {
+    label: 'Últimos 7 dias',
+    since: () => isoDate(addDays(new Date(), -6)),
+    until: () => today(),
+  },
+  {
+    label: 'Últimos 30 dias',
+    since: () => isoDate(addDays(new Date(), -29)),
+    until: () => today(),
+  },
+  {
+    label: 'Este mês',
+    since: () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` },
+    until: () => today(),
+  },
+  {
+    label: 'Mês passado',
+    since: () => { const d = new Date(); const s = new Date(d.getFullYear(), d.getMonth() - 1, 1); return isoDate(s) },
+    until: () => { const d = new Date(); const e = new Date(d.getFullYear(), d.getMonth(), 0); return isoDate(e) },
+  },
 ]
 
-// ─── api helpers ──────────────────────────────────────────────────────────────
+function fmtBR(iso: string) {
+  if (!iso) return '—'
+  const [y, m, day] = iso.split('-')
+  return `${day}/${m}/${y}`
+}
+
+function fmtBudget(daily: number, lifetime: number) {
+  if (daily > 0) return fmtCurrency(daily / 100) + '/dia'
+  if (lifetime > 0) return fmtCurrency(lifetime / 100) + ' total'
+  return '—'
+}
+
+const OBJECTIVE_LABEL: Record<string, string> = {
+  OUTCOME_LEADS: 'Leads', OUTCOME_SALES: 'Vendas', OUTCOME_TRAFFIC: 'Tráfego',
+  OUTCOME_AWARENESS: 'Reconhecimento', OUTCOME_ENGAGEMENT: 'Engajamento',
+  OUTCOME_APP_PROMOTION: 'App', OUTCOME_MESSAGES: 'Mensagens',
+  LINK_CLICKS: 'Tráfego', CONVERSIONS: 'Conversões', BRAND_AWARENESS: 'Reconhecimento',
+  REACH: 'Alcance', VIDEO_VIEWS: 'Visualizações', LEAD_GENERATION: 'Leads',
+  MESSAGES: 'Mensagens', PAGE_LIKES: 'Curtidas', POST_ENGAGEMENT: 'Engajamento',
+}
+
+// ─── api ─────────────────────────────────────────────────────────────────────
 
 async function metaGet(path: string, token: string, params: Record<string, string> = {}) {
   const url = new URL(`${META_GRAPH}${path}`)
   url.searchParams.set('access_token', token)
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v))
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v)
   const res = await fetch(url.toString())
   const json = await res.json()
   if (json.error) throw new Error(json.error.message)
@@ -123,107 +117,612 @@ async function metaGet(path: string, token: string, params: Record<string, strin
 async function metaPatch(id: string, token: string, body: Record<string, string>) {
   const url = new URL(`${META_GRAPH}/${id}`)
   url.searchParams.set('access_token', token)
-  const res = await fetch(url.toString(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  })
+  const res = await fetch(url.toString(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
   const json = await res.json()
   if (json.error) throw new Error(json.error.message)
   return json
 }
 
-function findAction(actions: { action_type: string; value: string }[] | undefined, types: string[]): number {
-  if (!actions) return 0
-  return actions
-    .filter(a => types.some(t => a.action_type === t || a.action_type.startsWith(t)))
-    .reduce((s, a) => s + parseFloat(a.value || '0'), 0)
+// ─── action parsers ───────────────────────────────────────────────────────────
+
+type MetaInsight = Record<string, unknown>
+
+function getAction(ins: MetaInsight, type: string): number {
+  const arr = (ins.actions as { action_type: string; value: string }[] | undefined) ?? []
+  return parseFloat(arr.find(a => a.action_type === type)?.value ?? '0') || 0
 }
+function getCost(ins: MetaInsight, type: string): number {
+  const arr = (ins.cost_per_action_type as { action_type: string; value: string }[] | undefined) ?? []
+  return parseFloat(arr.find(a => a.action_type === type)?.value ?? '0') || 0
+}
+function n(v: unknown): number { return parseFloat(String(v ?? 0)) || 0 }
 
-function buildRow(campaign: { id: string; name: string; status: string; objective: string }, ins?: Record<string, unknown>): CampaignRow {
-  if (!ins) {
-    return { id: campaign.id, name: campaign.name, status: campaign.status, objective: campaign.objective ?? '', spend: 0, purchaseValue: 0, roas: 0, cpa: 0, ticketMedio: 0, addToCart: 0, purchases: 0, conversations: 0, costPerConversation: 0, leads: 0, costPerLead: 0, impressions: 0, reach: 0, clicks: 0, inlineLinkClicks: 0, ctr: 0, inlineLinkClickCtr: 0, cpm: 0, cpc: 0, cpcLink: 0, videoViews: 0, frequency: 0, pageEngagement: 0, results: 0, costPerResult: 0 }
-  }
-
-  const actions = ins.actions as { action_type: string; value: string }[] | undefined
-  const actionValues = ins.action_values as { action_type: string; value: string }[] | undefined
-  const costPer = ins.cost_per_action_type as { action_type: string; value: string }[] | undefined
-  const purchaseRoas = ins.purchase_roas as { action_type: string; value: string }[] | undefined
-
-  const spend = parseFloat(ins.spend as string ?? '0')
-  const impressions = parseInt(ins.impressions as string ?? '0')
-  const reach = parseInt(ins.reach as string ?? '0')
-  const clicks = parseInt(ins.clicks as string ?? '0')
-  const inlineLinkClicks = parseInt(ins.inline_link_clicks as string ?? '0')
-  const ctr = parseFloat(ins.ctr as string ?? '0')
-  const inlineLinkClickCtr = parseFloat(ins.inline_link_click_ctr as string ?? '0')
-  const cpm = parseFloat(ins.cpm as string ?? '0')
-  const cpc = parseFloat(ins.cpc as string ?? '0')
-  const frequency = parseFloat(ins.frequency as string ?? '0')
-
-  const purchases = findAction(actions, ['offsite_conversion.fb_pixel_purchase', 'purchase'])
-  const purchaseValue = findAction(actionValues, ['offsite_conversion.fb_pixel_purchase', 'purchase'])
-  const roas = purchaseRoas?.find(r => r.action_type === 'omni_purchase')?.value
-    ?? purchaseRoas?.[0]?.value ?? (spend > 0 && purchaseValue > 0 ? String(purchaseValue / spend) : '0')
-  const leads = findAction(actions, ['lead', 'offsite_conversion.fb_pixel_lead', 'onsite_conversion.lead_grouped'])
-  const conversations = findAction(actions, ['onsite_conversion.messaging_conversation_started_7d', 'onsite_conversion.total_messaging_connection'])
-  const addToCart = findAction(actions, ['add_to_cart', 'offsite_conversion.fb_pixel_add_to_cart'])
-  const pageEngagement = findAction(actions, ['page_engagement'])
-  const videoViews = (() => {
-    const vv = ins.video_p100_watched_actions as { action_type: string; value: string }[] | undefined
-    return vv ? vv.reduce((s, v) => s + parseFloat(v.value || '0'), 0) : 0
-  })()
-
-  const mainResult = leads > 0 ? leads : (purchases > 0 ? purchases : 0)
-  const costPerResult = mainResult > 0 ? spend / mainResult : 0
-
-  const findCost = (types: string[]) => {
-    if (!costPer) return 0
-    const found = costPer.find(c => types.some(t => c.action_type === t || c.action_type.startsWith(t)))
-    return found ? parseFloat(found.value || '0') : 0
-  }
+function parseAccountMetrics(ins: MetaInsight): AccountMetrics {
+  const conversations = getAction(ins, 'onsite_conversion.messaging_conversation_started_7d')
+    || getAction(ins, 'onsite_conversion.messaging_conversation_started_30d')
+  const costPerConversation = getCost(ins, 'onsite_conversion.messaging_conversation_started_7d')
+    || getCost(ins, 'onsite_conversion.messaging_conversation_started_30d')
+  const leads = getAction(ins, 'lead') + getAction(ins, 'offsite_conversion.fb_pixel_lead')
+  const purchases = getAction(ins, 'purchase') + getAction(ins, 'offsite_conversion.fb_pixel_purchase')
+  const results = conversations || leads || purchases || 0
+  const costPerResult = results > 0 ? n(ins.spend) / results : 0
 
   return {
-    id: campaign.id,
-    name: campaign.name,
-    status: campaign.status,
-    objective: campaign.objective ?? '',
-    spend,
-    purchaseValue,
-    roas: parseFloat(String(roas)),
-    cpa: mainResult > 0 ? spend / mainResult : 0,
-    ticketMedio: purchases > 0 ? purchaseValue / purchases : 0,
-    addToCart,
-    purchases,
+    spend: n(ins.spend),
     conversations,
-    costPerConversation: findCost(['onsite_conversion.messaging_conversation_started_7d']),
-    leads,
-    costPerLead: findCost(['lead', 'offsite_conversion.fb_pixel_lead']),
-    impressions,
-    reach,
-    clicks,
-    inlineLinkClicks,
-    ctr,
-    inlineLinkClickCtr,
-    cpm,
-    cpc,
-    cpcLink: inlineLinkClicks > 0 ? spend / inlineLinkClicks : 0,
-    videoViews,
-    frequency,
-    pageEngagement,
-    results: mainResult,
+    costPerConversation,
+    impressions: n(ins.impressions),
+    reach: n(ins.reach),
+    clicks: n(ins.clicks),
+    inlineLinkClicks: n(ins.inline_link_clicks),
+    ctr: n(ins.ctr),
+    inlineLinkClickCtr: n(ins.inline_link_click_ctr),
+    cpm: n(ins.cpm),
+    cpc: n(ins.cpc),
+    cpcLink: n(ins.cost_per_inline_link_click),
+    frequency: n(ins.frequency),
+    pageEngagement: getAction(ins, 'post_engagement') || getAction(ins, 'page_engagement'),
+    results,
     costPerResult,
   }
 }
 
-function fmtVal(v: number, f: ColFormat): string {
-  if (f === 'currency') return fmtCurrency(v)
-  if (f === 'pct') return fmtPct(v)
-  if (f === 'decimal') return v > 0 ? v.toFixed(2) : '—'
-  return fmt(v)
+function parseCampaign(
+  c: { id: string; name: string; status: string; objective: string; start_time?: string; daily_budget?: string; lifetime_budget?: string },
+  ins: MetaInsight | undefined,
+): CampaignRow {
+  const conversations = ins ? (getAction(ins, 'onsite_conversion.messaging_conversation_started_7d') || getAction(ins, 'onsite_conversion.messaging_conversation_started_30d')) : 0
+  const leads = ins ? (getAction(ins, 'lead') + getAction(ins, 'offsite_conversion.fb_pixel_lead')) : 0
+  const purchases = ins ? (getAction(ins, 'purchase') + getAction(ins, 'offsite_conversion.fb_pixel_purchase')) : 0
+  const results = conversations || leads || purchases || 0
+  const spend = ins ? n(ins.spend) : 0
+  return {
+    id: c.id, name: c.name, status: c.status, objective: c.objective,
+    startTime: c.start_time ?? '',
+    dailyBudget: n(c.daily_budget),
+    lifetimeBudget: n(c.lifetime_budget),
+    spend, clicks: ins ? n(ins.clicks) : 0,
+    inlineLinkClicks: ins ? n(ins.inline_link_clicks) : 0,
+    ctr: ins ? n(ins.ctr) : 0,
+    inlineLinkClickCtr: ins ? n(ins.inline_link_click_ctr) : 0,
+    cpm: ins ? n(ins.cpm) : 0,
+    cpc: ins ? n(ins.cpc) : 0,
+    cpcLink: ins ? n(ins.cost_per_inline_link_click) : 0,
+    impressions: ins ? n(ins.impressions) : 0,
+    reach: ins ? n(ins.reach) : 0,
+    frequency: ins ? n(ins.frequency) : 0,
+    results, costPerResult: results > 0 ? spend / results : 0,
+  }
 }
 
-// ─── component ────────────────────────────────────────────────────────────────
+// ─── chart helper ─────────────────────────────────────────────────────────────
+
+function buildPolyline(data: DailyPoint[], key: keyof DailyPoint, W: number, H: number): string {
+  if (data.length < 2) return ''
+  const vals = data.map(d => d[key] as number)
+  const max = Math.max(...vals, 0.01)
+  return data.map((d, i) => {
+    const x = (i / (data.length - 1)) * W
+    const y = H - ((d[key] as number) / max) * (H - 12)
+    return `${x.toFixed(1)},${y.toFixed(1)}`
+  }).join(' ')
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+
+interface KpiDef {
+  key: keyof AccountMetrics
+  label: string
+  icon: React.ReactNode
+  tip: string
+  format: 'currency' | 'number' | 'decimal' | 'pct'
+}
+
+const KPI_DEFS: KpiDef[] = [
+  { key: 'spend',                label: 'Investimento',               icon: <DollarSign size={13} />,    tip: 'Total investido no período',                    format: 'currency' },
+  { key: 'conversations',        label: 'Conversas',                   icon: <MessageSquare size={13} />, tip: 'Conversas iniciadas via Messenger/WhatsApp',     format: 'number'   },
+  { key: 'costPerConversation',  label: 'Custo por Conversa',          icon: <DollarSign size={13} />,    tip: 'Custo médio por conversa iniciada',              format: 'currency' },
+  { key: 'impressions',          label: 'Impressões',                  icon: <Eye size={13} />,           tip: 'Número total de vezes que os anúncios foram exibidos', format: 'number' },
+  { key: 'reach',                label: 'Alcance',                     icon: <Users size={13} />,         tip: 'Número de pessoas únicas alcançadas',            format: 'number'   },
+  { key: 'clicks',               label: 'Cliques',                     icon: <MousePointer size={13} />,  tip: 'Total de cliques em todos os anúncios',          format: 'number'   },
+  { key: 'inlineLinkClicks',     label: 'Total de cliques no link',    icon: <MousePointer size={13} />,  tip: 'Cliques em links dentro dos anúncios',           format: 'number'   },
+  { key: 'ctr',                  label: 'CTR (Todos)',                 icon: <Percent size={13} />,       tip: 'Taxa de cliques em relação às impressões totais', format: 'pct'     },
+  { key: 'inlineLinkClickCtr',   label: 'CTR (Cliques no link)',       icon: <Percent size={13} />,       tip: 'Taxa de cliques em links',                       format: 'pct'      },
+  { key: 'cpm',                  label: 'CPM Médio',                   icon: <BarChart2 size={13} />,     tip: 'Custo médio por mil impressões',                 format: 'currency' },
+  { key: 'cpc',                  label: 'CPC Médio',                   icon: <DollarSign size={13} />,    tip: 'Custo médio por clique',                         format: 'currency' },
+  { key: 'cpcLink',              label: 'CPC Médio (No link)',         icon: <DollarSign size={13} />,    tip: 'Custo médio por clique em link',                 format: 'currency' },
+  { key: 'frequency',            label: 'Frequência',                  icon: <Activity size={13} />,      tip: 'Média de vezes que cada pessoa viu o anúncio',  format: 'decimal'  },
+  { key: 'pageEngagement',       label: 'Engajamento da página',       icon: <Heart size={13} />,         tip: 'Total de interações com a página',               format: 'number'   },
+  { key: 'results',              label: 'Resultados',                  icon: <Target size={13} />,        tip: 'Total de conversões ou resultados do objetivo',  format: 'number'   },
+  { key: 'costPerResult',        label: 'Custo por Resultado',         icon: <DollarSign size={13} />,    tip: 'Custo médio por resultado obtido',               format: 'currency' },
+]
+
+function fmtKpi(v: number, format: KpiDef['format']) {
+  if (format === 'currency') return fmtCurrency(v)
+  if (format === 'pct') return fmtPct(v)
+  if (format === 'decimal') return v > 0 ? v.toFixed(2) : '0,00'
+  return fmtInt(v)
+}
+
+function KpiCard({
+  def, value, hidden, onToggle,
+}: { def: KpiDef; value: number; hidden: boolean; onToggle: () => void }) {
+  const [tip, setTip] = useState(false)
+  return (
+    <div
+      className="rounded-xl p-3 flex flex-col gap-2 relative"
+      style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}
+    >
+      <div className="flex items-start justify-between gap-1">
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          <span className="text-[11px] font-medium truncate" style={{ color: '#8892a4' }}>{def.label}</span>
+          <button
+            className="flex-shrink-0 relative"
+            onMouseEnter={() => setTip(true)}
+            onMouseLeave={() => setTip(false)}
+          >
+            <Info size={10} style={{ color: '#444' }} />
+            {tip && (
+              <div
+                className="absolute left-0 top-5 z-50 rounded-lg px-2 py-1.5 text-[10px] w-48 leading-relaxed"
+                style={{ backgroundColor: '#1a2030', border: `1px solid ${BORDER}`, color: '#aaa' }}
+              >
+                {def.tip}
+              </div>
+            )}
+          </button>
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          <button onClick={onToggle} className="p-0.5" title={hidden ? 'Exibir' : 'Ocultar'}>
+            {hidden
+              ? <EyeOff size={11} style={{ color: '#444' }} />
+              : <Eye size={11} style={{ color: '#444' }} />}
+          </button>
+          <span style={{ color: '#444' }}>{def.icon}</span>
+        </div>
+      </div>
+      <div className="text-lg font-bold" style={{ color: hidden ? '#333' : '#fff' }}>
+        {hidden ? '••••' : fmtKpi(value, def.format)}
+      </div>
+    </div>
+  )
+}
+
+// ─── PerformanceChart ─────────────────────────────────────────────────────────
+
+const CHART_METRICS = [
+  { key: 'spend' as const, label: 'Investimento' },
+  { key: 'impressions' as const, label: 'Impressões' },
+  { key: 'clicks' as const, label: 'Cliques' },
+]
+
+function PerformanceChart({
+  data, loading, onLoad,
+}: { data: DailyPoint[]; loading: boolean; onLoad: () => void }) {
+  const [metric, setMetric] = useState<'spend' | 'impressions' | 'clicks'>('spend')
+  const W = 900, H = 160
+
+  const polyline = buildPolyline(data, metric, W, H)
+  const maxVal = Math.max(...data.map(d => d[metric]), 0)
+  const closedPath = polyline ? `0,${H} ${polyline} ${W},${H}` : ''
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <span className="text-sm font-semibold text-white">Performance</span>
+        {data.length > 0 && (
+          <div className="flex items-center gap-1">
+            {CHART_METRICS.map(m => (
+              <button
+                key={m.key}
+                onClick={() => setMetric(m.key)}
+                className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-colors"
+                style={{
+                  backgroundColor: metric === m.key ? BLUE : 'transparent',
+                  color: metric === m.key ? '#fff' : '#6b7a8d',
+                  border: `1px solid ${metric === m.key ? BLUE : BORDER}`,
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+            <button onClick={onLoad} disabled={loading} className="ml-2 p-1.5 rounded-lg" style={{ border: `1px solid ${BORDER}`, color: '#6b7a8d' }}>
+              {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {data.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-16 gap-4">
+          <BarChart2 size={32} style={{ color: '#2a3040' }} />
+          <p className="text-sm text-center" style={{ color: '#555' }}>
+            Clique no botão abaixo para gerar o gráfico com os dados diários
+          </p>
+          <button
+            onClick={onLoad}
+            disabled={loading}
+            className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-opacity disabled:opacity-60"
+            style={{ backgroundColor: BLUE, color: '#fff' }}
+          >
+            {loading ? <Loader2 size={14} className="animate-spin" /> : null}
+            Gerar Gráfico
+          </button>
+        </div>
+      ) : (
+        <div className="px-4 py-3">
+          <div className="flex items-end justify-between mb-2">
+            <span className="text-[10px]" style={{ color: '#444' }}>
+              {CHART_METRICS.find(m => m.key === metric)?.label}
+            </span>
+            <span className="text-[10px]" style={{ color: '#444' }}>
+              Máx: {metric === 'spend' ? fmtCurrency(maxVal) : fmtInt(maxVal)}
+            </span>
+          </div>
+          <div className="w-full overflow-hidden rounded-lg" style={{ height: 160 }}>
+            <svg width="100%" height="160" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={BLUE} stopOpacity="0.25" />
+                  <stop offset="100%" stopColor={BLUE} stopOpacity="0" />
+                </linearGradient>
+              </defs>
+              {closedPath && <polygon fill="url(#chartGrad)" points={closedPath} />}
+              {polyline && <polyline fill="none" stroke={BLUE} strokeWidth="2" points={polyline} />}
+            </svg>
+          </div>
+          <div className="flex justify-between mt-1">
+            {data.length > 0 && (
+              <>
+                <span className="text-[9px]" style={{ color: '#444' }}>{fmtBR(data[0].date)}</span>
+                <span className="text-[9px]" style={{ color: '#444' }}>{fmtBR(data[data.length - 1].date)}</span>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── CampaignTable ────────────────────────────────────────────────────────────
+
+const TABLE_COLS = [
+  { key: 'objective', label: 'Objetivo',             width: 100 },
+  { key: 'name',      label: 'Campanha',             width: 220 },
+  { key: 'status',    label: 'Status',               width: 90  },
+  { key: 'startTime', label: 'Data Início',          width: 100 },
+  { key: 'budget',    label: 'Orçamento',            width: 110 },
+  { key: 'spend',     label: 'Gasto',                width: 100 },
+  { key: 'cpc',       label: 'CPC (Todos)',          width: 100 },
+  { key: 'ctr',       label: 'CTR (Todos)',          width: 100 },
+  { key: 'cpcLink',   label: 'CPC (Link)',           width: 100 },
+  { key: 'cpm',       label: 'CPM',                  width: 100 },
+  { key: 'impressions', label: 'Impressões',         width: 100 },
+  { key: 'reach',     label: 'Alcance',              width: 90  },
+  { key: 'results',   label: 'Resultados',           width: 100 },
+  { key: 'costPerResult', label: 'Custo/Resultado',  width: 110 },
+] as const
+
+type TableColKey = typeof TABLE_COLS[number]['key']
+
+function CampaignTableSection({
+  rows, loading, onToggle, toggling, period, onPeriodChange,
+}: {
+  rows: CampaignRow[]
+  loading: boolean
+  onToggle: (row: CampaignRow) => void
+  toggling: Record<string, boolean>
+  period: number
+  onPeriodChange: (i: number) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [showPaused, setShowPaused] = useState(true)
+  const [visibleCols, setVisibleCols] = useState<Set<TableColKey>>(
+    new Set(['objective', 'name', 'status', 'startTime', 'budget', 'spend', 'cpc', 'ctr', 'cpcLink', 'cpm'])
+  )
+  const [showColPicker, setShowColPicker] = useState(false)
+  const [showPeriod, setShowPeriod] = useState(false)
+
+  const filtered = rows.filter(r => {
+    if (!showPaused && r.status !== 'ACTIVE') return false
+    if (search && !r.name.toLowerCase().includes(search.toLowerCase())) return false
+    return true
+  })
+
+  const activeCols = TABLE_COLS.filter(c => visibleCols.has(c.key))
+
+  function getCellValue(row: CampaignRow, key: TableColKey): React.ReactNode {
+    if (key === 'objective') return <span className="text-[10px]" style={{ color: '#8892a4' }}>{OBJECTIVE_LABEL[row.objective] ?? row.objective ?? '—'}</span>
+    if (key === 'name') return <span className="text-white font-medium text-xs truncate block" style={{ maxWidth: 210 }}>{row.name}</span>
+    if (key === 'status') {
+      const active = row.status === 'ACTIVE'
+      return (
+        <div className="flex items-center gap-1">
+          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: active ? '#10b981' : '#555' }} />
+          <span className="text-[10px]" style={{ color: active ? '#10b981' : '#6b7a8d' }}>{active ? 'Ativo' : 'Pausado'}</span>
+        </div>
+      )
+    }
+    if (key === 'startTime') return <span className="text-[10px]" style={{ color: '#6b7a8d' }}>{fmtBR(row.startTime?.slice(0, 10) ?? '')}</span>
+    if (key === 'budget') return <span className="text-[10px]" style={{ color: '#aaa' }}>{fmtBudget(row.dailyBudget, row.lifetimeBudget)}</span>
+    if (key === 'spend') return <span className="text-xs font-semibold text-white">{fmtCurrency(row.spend)}</span>
+    if (key === 'cpc') return <span className="text-xs" style={{ color: '#aaa' }}>{row.cpc > 0 ? fmtCurrency(row.cpc) : '—'}</span>
+    if (key === 'ctr') return <span className="text-xs" style={{ color: '#aaa' }}>{fmtPct(row.ctr)}</span>
+    if (key === 'cpcLink') return <span className="text-xs" style={{ color: '#aaa' }}>{row.cpcLink > 0 ? fmtCurrency(row.cpcLink) : '—'}</span>
+    if (key === 'cpm') return <span className="text-xs" style={{ color: '#aaa' }}>{row.cpm > 0 ? fmtCurrency(row.cpm) : '—'}</span>
+    if (key === 'impressions') return <span className="text-xs" style={{ color: '#aaa' }}>{fmtInt(row.impressions)}</span>
+    if (key === 'reach') return <span className="text-xs" style={{ color: '#aaa' }}>{fmtInt(row.reach)}</span>
+    if (key === 'results') return <span className="text-xs" style={{ color: '#aaa' }}>{fmtInt(row.results)}</span>
+    if (key === 'costPerResult') return <span className="text-xs" style={{ color: '#aaa' }}>{row.costPerResult > 0 ? fmtCurrency(row.costPerResult) : '—'}</span>
+    return null
+  }
+
+  const totalSpend = filtered.reduce((s, r) => s + r.spend, 0)
+  const totalCpc = filtered.reduce((s, r) => s + r.cpc, 0) / (filtered.filter(r => r.cpc > 0).length || 1)
+  const totalCtr = filtered.reduce((s, r) => s + r.ctr, 0) / (filtered.length || 1)
+  const totalCpcLink = filtered.reduce((s, r) => s + r.cpcLink, 0) / (filtered.filter(r => r.cpcLink > 0).length || 1)
+  const totalCpm = filtered.reduce((s, r) => s + r.cpm, 0) / (filtered.filter(r => r.cpm > 0).length || 1)
+  const totalImp = filtered.reduce((s, r) => s + r.impressions, 0)
+  const totalReach = filtered.reduce((s, r) => s + r.reach, 0)
+  const totalResults = filtered.reduce((s, r) => s + r.results, 0)
+  const totalCpr = totalResults > 0 ? totalSpend / totalResults : 0
+
+  function getTotalCell(key: TableColKey): React.ReactNode {
+    if (key === 'name') return <span className="text-xs font-bold text-white">{filtered.length} campanhas</span>
+    if (key === 'spend') return <span className="text-xs font-bold text-white">{fmtCurrency(totalSpend)}</span>
+    if (key === 'cpc') return <span className="text-xs font-bold text-white">{totalCpc > 0 ? fmtCurrency(totalCpc) : '—'}</span>
+    if (key === 'ctr') return <span className="text-xs font-bold text-white">{fmtPct(totalCtr)}</span>
+    if (key === 'cpcLink') return <span className="text-xs font-bold text-white">{totalCpcLink > 0 ? fmtCurrency(totalCpcLink) : '—'}</span>
+    if (key === 'cpm') return <span className="text-xs font-bold text-white">{totalCpm > 0 ? fmtCurrency(totalCpm) : '—'}</span>
+    if (key === 'impressions') return <span className="text-xs font-bold text-white">{fmtInt(totalImp)}</span>
+    if (key === 'reach') return <span className="text-xs font-bold text-white">{fmtInt(totalReach)}</span>
+    if (key === 'results') return <span className="text-xs font-bold text-white">{fmtInt(totalResults)}</span>
+    if (key === 'costPerResult') return <span className="text-xs font-bold text-white">{totalCpr > 0 ? fmtCurrency(totalCpr) : '—'}</span>
+    return null
+  }
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+      {/* toolbar */}
+      <div className="flex items-center gap-2 px-3 py-2.5 flex-wrap" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg flex-1 min-w-40" style={{ backgroundColor: '#0a0d14', border: `1px solid ${BORDER}` }}>
+          <Search size={11} style={{ color: '#444' }} />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Buscar campanha..."
+            className="bg-transparent text-xs outline-none flex-1 text-white placeholder-gray-600"
+          />
+        </div>
+
+        <button
+          onClick={() => setShowPaused(v => !v)}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] border transition-all"
+          style={{ borderColor: showPaused ? `${BLUE}55` : BORDER, color: showPaused ? BLUE : '#6b7a8d', backgroundColor: showPaused ? `${BLUE}11` : 'transparent' }}
+        >
+          {showPaused && <Check size={9} />}
+          Exibir pausadas
+        </button>
+
+        {/* period */}
+        <div className="relative">
+          <button
+            onClick={() => setShowPeriod(v => !v)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] border"
+            style={{ borderColor: BORDER, color: '#6b7a8d' }}
+          >
+            <Calendar size={11} />
+            {PERIODS[period].label}
+            <ChevronDown size={10} />
+          </button>
+          {showPeriod && (
+            <div className="absolute right-0 top-8 z-30 rounded-xl py-1 w-44" style={{ backgroundColor: '#111827', border: `1px solid ${BORDER}` }}>
+              {PERIODS.map((p, i) => (
+                <button
+                  key={p.label}
+                  onClick={() => { onPeriodChange(i); setShowPeriod(false) }}
+                  className="w-full text-left px-3 py-2 text-[11px] hover:bg-white/5 transition-colors flex items-center justify-between"
+                  style={{ color: period === i ? BLUE : '#aaa' }}
+                >
+                  {p.label}
+                  {period === i && <Check size={9} style={{ color: BLUE }} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* col picker */}
+        <div className="relative">
+          <button
+            onClick={() => setShowColPicker(v => !v)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] border"
+            style={{ borderColor: BORDER, color: '#6b7a8d' }}
+          >
+            <Settings size={11} />
+            Organizar
+          </button>
+          {showColPicker && (
+            <div
+              className="absolute right-0 top-8 z-30 rounded-xl p-2 w-52"
+              style={{ backgroundColor: '#111827', border: `1px solid ${BORDER}` }}
+            >
+              {TABLE_COLS.filter(c => c.key !== 'name').map(col => (
+                <button
+                  key={col.key}
+                  onClick={() => {
+                    setVisibleCols(prev => {
+                      const next = new Set(prev)
+                      next.has(col.key) ? next.delete(col.key) : next.add(col.key)
+                      return next
+                    })
+                  }}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-[11px] transition-colors hover:bg-white/5"
+                  style={{ color: visibleCols.has(col.key) ? '#fff' : '#555' }}
+                >
+                  <div
+                    className="w-3 h-3 rounded-sm border flex items-center justify-center flex-shrink-0"
+                    style={{ borderColor: visibleCols.has(col.key) ? BLUE : '#333', backgroundColor: visibleCols.has(col.key) ? BLUE : 'transparent' }}
+                  >
+                    {visibleCols.has(col.key) && <Check size={8} style={{ color: '#fff' }} />}
+                  </div>
+                  {col.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {loading && <Loader2 size={12} className="animate-spin ml-auto" style={{ color: BLUE }} />}
+      </div>
+
+      {/* table */}
+      <div className="overflow-auto">
+        <table className="w-full" style={{ minWidth: activeCols.reduce((s, c) => s + c.width, 0) }}>
+          <thead>
+            <tr style={{ borderBottom: `1px solid ${BORDER}` }}>
+              {activeCols.map(col => (
+                <th
+                  key={col.key}
+                  className="px-3 py-2.5 text-left text-[10px] font-bold uppercase tracking-widest whitespace-nowrap"
+                  style={{ color: '#444', width: col.width, minWidth: col.width }}
+                >
+                  {col.label}
+                </th>
+              ))}
+              <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-right" style={{ color: '#444' }}>Ação</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={activeCols.length + 1} className="text-center py-12 text-sm" style={{ color: '#444' }}>
+                  {loading ? 'Carregando campanhas...' : 'Nenhuma campanha encontrada para o período'}
+                </td>
+              </tr>
+            )}
+            {filtered.map(row => (
+              <tr
+                key={row.id}
+                style={{ borderBottom: `1px solid #0d0f18` }}
+                onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0f1525')}
+                onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
+              >
+                {activeCols.map(col => (
+                  <td key={col.key} className="px-3 py-2.5" style={{ width: col.width }}>
+                    {getCellValue(row, col.key)}
+                  </td>
+                ))}
+                <td className="px-3 py-2.5 text-right">
+                  <button
+                    onClick={() => onToggle(row)}
+                    disabled={toggling[row.id]}
+                    title={row.status === 'ACTIVE' ? 'Pausar' : 'Ativar'}
+                    className="p-1 rounded-md transition-colors disabled:opacity-50"
+                    style={{
+                      color: row.status === 'ACTIVE' ? '#ef4444' : '#10b981',
+                      border: `1px solid ${row.status === 'ACTIVE' ? '#ef444433' : '#10b98133'}`,
+                    }}
+                  >
+                    {toggling[row.id]
+                      ? <Loader2 size={11} className="animate-spin" />
+                      : row.status === 'ACTIVE' ? <Pause size={11} /> : <Play size={11} />}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          {filtered.length > 0 && (
+            <tfoot>
+              <tr style={{ borderTop: `1px solid ${BORDER}`, backgroundColor: '#0a0d14' }}>
+                {activeCols.map(col => (
+                  <td key={col.key} className="px-3 py-2.5" style={{ width: col.width }}>
+                    {getTotalCell(col.key)}
+                  </td>
+                ))}
+                <td />
+              </tr>
+            </tfoot>
+          )}
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── ConversionFunnel ─────────────────────────────────────────────────────────
+
+function ConversionFunnel({ metrics }: { metrics: AccountMetrics | null }) {
+  const imp = metrics?.impressions ?? 0
+  const clk = metrics?.clicks ?? 0
+  const res = metrics?.results ?? 0
+  const spend = metrics?.spend ?? 0
+
+  const pct1 = imp > 0 ? (clk / imp) * 100 : 0
+  const pct2 = clk > 0 ? (res / clk) * 100 : 0
+
+  const steps = [
+    { label: 'Impressões', value: imp, cost: spend, pct: null, width: '100%' },
+    { label: 'Cliques', value: clk, cost: clk > 0 && metrics?.cpc ? clk * (metrics.cpc) : 0, pct: pct1, width: '75%' },
+    { label: 'Resultados', value: res, cost: metrics ? res * (metrics.costPerResult ?? 0) : 0, pct: pct2, width: '50%' },
+  ]
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+      <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: `1px solid ${BORDER}` }}>
+        <span className="text-sm font-semibold text-white">Funil de Conversão</span>
+        <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px]" style={{ border: `1px solid ${BORDER}`, color: '#6b7a8d' }}>
+          <Download size={11} /> Exportar PDF
+        </button>
+      </div>
+      <div className="p-4 space-y-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-medium text-white px-3 py-1 rounded-full" style={{ backgroundColor: '#111827', border: `1px solid ${BORDER}` }}>
+            Todas as campanhas
+          </span>
+        </div>
+        <div className="text-[11px] font-semibold text-white mb-1" style={{ color: BLUE }}>
+          Valor Investido: {fmtCurrency(spend)}
+        </div>
+        <div className="flex flex-col items-center gap-0">
+          {steps.map((step, i) => (
+            <div key={step.label} className="w-full flex flex-col items-center">
+              {step.pct !== null && (
+                <div className="flex items-center gap-1 py-1.5">
+                  <div className="h-px flex-1" style={{ width: 20, backgroundColor: '#1e2535' }} />
+                  <span className="text-[10px] font-semibold" style={{ color: '#6b7a8d' }}>
+                    {step.pct.toFixed(1)}% Conversão
+                  </span>
+                  <div className="h-px flex-1" style={{ width: 20, backgroundColor: '#1e2535' }} />
+                </div>
+              )}
+              <div
+                className="flex items-center justify-between px-4 py-3 rounded-lg"
+                style={{
+                  width: step.width,
+                  backgroundColor: `${BLUE}${22 - i * 4}`,
+                  border: `1px solid ${BLUE}44`,
+                }}
+              >
+                <span className="text-sm font-bold text-white">{step.label}</span>
+                <div className="text-right">
+                  <div className="text-base font-bold text-white">{fmtInt(step.value)}</div>
+                  <div className="text-[10px]" style={{ color: '#8892a4' }}>{fmtCurrency(step.cost)}</div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="flex items-center gap-1 text-[11px] mt-2" style={{ color: BLUE }}>
+          <Plus size={11} /> Adicionar etapa
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 interface Props { client: Client }
 
@@ -231,54 +730,79 @@ export function MetaAdsLiveTab({ client }: Props) {
   const token = localStorage.getItem(META_STORAGE_KEY) ?? ''
   const accountId = client.meta_ads_account_id ?? ''
 
+  const [periodIdx, setPeriodIdx] = useState(4) // "Este mês" default
+  const [metrics, setMetrics] = useState<AccountMetrics | null>(null)
   const [campaigns, setCampaigns] = useState<CampaignRow[]>([])
-  const [loading, setLoading] = useState(false)
+  const [dailyData, setDailyData] = useState<DailyPoint[]>([])
   const [error, setError] = useState('')
-  const [period, setPeriod] = useState('30d')
+  const [loadingMain, setLoadingMain] = useState(false)
+  const [loadingChart, setLoadingChart] = useState(false)
+  const [hiddenMetrics, setHiddenMetrics] = useState<Set<keyof AccountMetrics>>(new Set())
   const [toggling, setToggling] = useState<Record<string, boolean>>({})
-  const [visibleCols, setVisibleCols] = useState<Set<ColKey>>(new Set(DEFAULT_COLS))
-  const [showColPicker, setShowColPicker] = useState(false)
-  const [showPaused, setShowPaused] = useState(true)
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false)
 
-  const load = useCallback(async () => {
+  const { since, until } = { since: PERIODS[periodIdx].since(), until: PERIODS[periodIdx].until() }
+  const dateLabel = `${fmtBR(since)} – ${fmtBR(until)}`
+
+  const loadMain = useCallback(async () => {
     if (!token || !accountId) return
-    setLoading(true)
+    setLoadingMain(true)
     setError('')
     try {
-      const { since, until } = periodRange(period)
-
-      const [campRes, insRes] = await Promise.all([
+      const timeRange = JSON.stringify({ since, until })
+      const [acctRes, campRes, insRes] = await Promise.all([
+        metaGet(`/${accountId}/insights`, token, {
+          fields: 'spend,impressions,reach,clicks,inline_link_clicks,ctr,inline_link_click_ctr,cpm,cpc,cost_per_inline_link_click,frequency,actions,cost_per_action_type,action_values,purchase_roas',
+          time_range: timeRange,
+        }),
         metaGet(`/${accountId}/campaigns`, token, {
-          fields: 'id,name,status,objective',
+          fields: 'id,name,status,objective,start_time,daily_budget,lifetime_budget',
           limit: '100',
         }),
         metaGet(`/${accountId}/insights`, token, {
-          fields: 'campaign_id,spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,inline_link_clicks,inline_link_click_ctr,actions,action_values,cost_per_action_type,purchase_roas,video_p100_watched_actions',
-          time_range: JSON.stringify({ since, until }),
+          fields: 'campaign_id,spend,clicks,inline_link_clicks,ctr,inline_link_click_ctr,cpm,cpc,cost_per_inline_link_click,impressions,reach,frequency,actions,cost_per_action_type',
+          time_range: timeRange,
           level: 'campaign',
           limit: '100',
         }),
       ])
 
-      const insightMap: Record<string, Record<string, unknown>> = {}
-      for (const ins of (insRes.data ?? [])) {
-        insightMap[ins.campaign_id] = ins
-      }
+      const insightMap: Record<string, MetaInsight> = {}
+      for (const ins of (insRes.data ?? [])) insightMap[(ins as MetaInsight).campaign_id as string] = ins
 
-      const rows: CampaignRow[] = (campRes.data ?? []).map(
-        (c: { id: string; name: string; status: string; objective: string }) =>
-          buildRow(c, insightMap[c.id])
-      )
-
-      setCampaigns(rows)
+      if (acctRes.data?.[0]) setMetrics(parseAccountMetrics(acctRes.data[0]))
+      setCampaigns((campRes.data ?? []).map((c: Parameters<typeof parseCampaign>[0]) => parseCampaign(c, insightMap[c.id])))
     } catch (e: unknown) {
       setError((e as Error).message)
     } finally {
-      setLoading(false)
+      setLoadingMain(false)
     }
-  }, [token, accountId, period])
+  }, [token, accountId, since, until])
 
-  useEffect(() => { load() }, [load])
+  const loadChart = useCallback(async () => {
+    if (!token || !accountId) return
+    setLoadingChart(true)
+    try {
+      const res = await metaGet(`/${accountId}/insights`, token, {
+        fields: 'date_start,spend,impressions,clicks',
+        time_range: JSON.stringify({ since, until }),
+        time_increment: '1',
+        limit: '90',
+      })
+      setDailyData((res.data ?? []).map((d: { date_start: string; spend: string; impressions: string; clicks: string }) => ({
+        date: d.date_start,
+        spend: parseFloat(d.spend ?? '0') || 0,
+        impressions: parseFloat(d.impressions ?? '0') || 0,
+        clicks: parseFloat(d.clicks ?? '0') || 0,
+      })))
+    } catch (e: unknown) {
+      setError((e as Error).message)
+    } finally {
+      setLoadingChart(false)
+    }
+  }, [token, accountId, since, until])
+
+  useEffect(() => { loadMain() }, [loadMain])
 
   async function toggleStatus(row: CampaignRow) {
     const newStatus = row.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE'
@@ -293,207 +817,234 @@ export function MetaAdsLiveTab({ client }: Props) {
     }
   }
 
-  function toggleCol(key: ColKey) {
-    setVisibleCols(prev => {
+  function toggleMetric(key: keyof AccountMetrics) {
+    setHiddenMetrics(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
   }
 
-  const activeCols = COLUMNS.filter(c => visibleCols.has(c.key))
-  const displayed = showPaused ? campaigns : campaigns.filter(c => c.status === 'ACTIVE')
-
-  // Totals
-  const totals = displayed.reduce((acc, row) => {
-    COLUMNS.forEach(col => { acc[col.key] = (acc[col.key] ?? 0) + row[col.key] })
-    return acc
-  }, {} as Record<ColKey, number>)
-  if (totals.roas && displayed.length > 0) {
-    const totalSpend = displayed.reduce((s, r) => s + r.spend, 0)
-    const totalPurchaseValue = displayed.reduce((s, r) => s + r.purchaseValue, 0)
-    totals.roas = totalSpend > 0 && totalPurchaseValue > 0 ? totalPurchaseValue / totalSpend : 0
-  }
-  if (totals.frequency && displayed.length > 0) totals.frequency = totals.frequency / displayed.length
-  if (totals.ctr && displayed.length > 0) totals.ctr = totals.ctr / displayed.length
-  if (totals.inlineLinkClickCtr && displayed.length > 0) totals.inlineLinkClickCtr = totals.inlineLinkClickCtr / displayed.length
-
   // ── no config ──
   if (!token || !accountId) {
     return (
-      <div className="rounded-xl border border-[#1a1a1a] py-14 text-center" style={{ backgroundColor: '#0a0a0a' }}>
-        <AlertCircle size={24} className="mx-auto mb-3" style={{ color: '#555' }} />
-        <p className="text-sm font-semibold text-white mb-1">Conta não conectada</p>
-        <p className="text-xs mb-1" style={{ color: '#555' }}>
-          {!token ? 'Configure o token Meta em Integrações → Meta Ads.' : 'Vincule uma conta de anúncios a este cliente em Integrações → Meta Ads.'}
+      <div className="rounded-xl py-16 text-center" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+        <AlertCircle size={28} className="mx-auto mb-4" style={{ color: '#333' }} />
+        <p className="text-sm font-semibold text-white mb-2">Conta não conectada</p>
+        <p className="text-xs" style={{ color: '#555' }}>
+          {!token
+            ? 'Configure o token Meta em Integrações → Meta Ads.'
+            : 'Vincule uma conta de anúncios a este cliente.'}
         </p>
       </div>
     )
   }
 
   return (
-    <div className="space-y-3">
-      {/* Toolbar */}
-      <div className="flex items-center gap-2 flex-wrap">
-        {/* Period */}
-        <div className="relative">
-          <select
-            value={period}
-            onChange={e => setPeriod(e.target.value)}
-            className="appearance-none rounded-lg px-3 py-1.5 text-xs text-white border pr-6 focus:outline-none cursor-pointer"
-            style={{ backgroundColor: '#0d0d0d', borderColor: '#1e1e1e' }}
-          >
-            {PERIODS.map(p => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
-          <ChevronDown size={10} className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#555' }} />
+    <div className="space-y-4" style={{ backgroundColor: SECTION_BG }}>
+
+      {/* ── Header ── */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: BLUE }}>
+            M
+          </div>
+          <span className="text-base font-bold text-white">Meta Ads</span>
         </div>
 
-        {/* Paused toggle */}
-        <button
-          onClick={() => setShowPaused(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-all"
-          style={{ borderColor: showPaused ? '#1FCE4A44' : '#1e1e1e', color: showPaused ? '#1FCE4A' : '#555', backgroundColor: showPaused ? '#0d1f14' : 'transparent' }}
-        >
-          {showPaused ? <Check size={11} /> : null}
-          Exibir pausadas
-        </button>
+        <div className="flex items-center gap-2">
+          {/* Account pill */}
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}`, color: '#8892a4' }}>
+            {accountId}
+            <ChevronDown size={10} />
+          </div>
 
-        {/* Columns picker */}
-        <div className="relative">
-          <button
-            onClick={() => setShowColPicker(v => !v)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors"
-            style={{ borderColor: '#1e1e1e', color: '#888' }}
-          >
-            <Settings2 size={11} />
-            Colunas ({visibleCols.size})
-          </button>
-          {showColPicker && (
-            <div
-              className="absolute left-0 top-8 z-30 rounded-xl p-3 grid grid-cols-2 gap-1 w-72 max-h-72 overflow-y-auto"
-              style={{ backgroundColor: '#111', border: '1px solid #1e1e1e' }}
+          {/* Date range */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPeriodMenu(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium"
+              style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}`, color: '#8892a4' }}
             >
-              {COLUMNS.map(col => (
-                <button
-                  key={col.key}
-                  onClick={() => toggleCol(col.key)}
-                  className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-left text-[11px] transition-colors"
-                  style={{ color: visibleCols.has(col.key) ? '#fff' : '#555', backgroundColor: visibleCols.has(col.key) ? '#0d1f14' : 'transparent' }}
-                >
-                  {visibleCols.has(col.key) && <Check size={9} style={{ color: '#1FCE4A', flexShrink: 0 }} />}
-                  {col.label}
-                </button>
-              ))}
-            </div>
-          )}
+              <Calendar size={11} />
+              {dateLabel}
+              <ChevronDown size={10} />
+            </button>
+            {showPeriodMenu && (
+              <div
+                className="absolute right-0 top-9 z-50 rounded-xl py-1 w-48"
+                style={{ backgroundColor: '#111827', border: `1px solid ${BORDER}` }}
+              >
+                {PERIODS.map((p, i) => (
+                  <button
+                    key={p.label}
+                    onClick={() => { setPeriodIdx(i); setShowPeriodMenu(false); setDailyData([]) }}
+                    className="w-full text-left px-3 py-2 text-[11px] hover:bg-white/5 transition-colors flex items-center justify-between"
+                    style={{ color: periodIdx === i ? BLUE : '#aaa' }}
+                  >
+                    {p.label}
+                    {periodIdx === i && <Check size={9} style={{ color: BLUE }} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <button
+            onClick={loadMain}
+            disabled={loadingMain}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] disabled:opacity-50"
+            style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}`, color: '#6b7a8d' }}
+          >
+            {loadingMain ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
+            Atualizar
+          </button>
         </div>
+      </div>
 
-        <div className="flex-1" />
-
-        {/* Refresh */}
-        <button
-          onClick={load}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border transition-colors disabled:opacity-50"
-          style={{ borderColor: '#1e1e1e', color: '#888' }}
-        >
-          {loading ? <Loader2 size={11} className="animate-spin" /> : <RefreshCw size={11} />}
-          Atualizar
+      {/* PDF geral link */}
+      <div className="flex items-center">
+        <button className="flex items-center gap-1.5 text-[11px] hover:opacity-80 transition-opacity" style={{ color: BLUE }}>
+          <Download size={11} />
+          Baixar PDF da visão geral
         </button>
       </div>
 
+      {/* ── Error ── */}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: '#1a0808', color: '#EF4444', border: '1px solid #EF444433' }}>
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs" style={{ backgroundColor: '#1a0808', color: '#ef4444', border: '1px solid #ef444433' }}>
           <AlertCircle size={12} />{error}
+          <button onClick={() => setError('')} className="ml-auto text-xs underline">Fechar</button>
         </div>
       )}
 
-      {/* Table */}
-      {loading && campaigns.length === 0 ? (
-        <div className="flex justify-center py-14"><Loader2 size={18} className="animate-spin" style={{ color: '#1877F2' }} /></div>
-      ) : (
-        <div className="rounded-xl border overflow-auto" style={{ borderColor: '#1a1a1a' }}>
-          <table className="w-full text-xs" style={{ minWidth: `${200 + activeCols.length * 120}px` }}>
-            <thead>
-              <tr style={{ backgroundColor: '#0a0a0a', borderBottom: '1px solid #111' }}>
-                <th className="text-left px-3 py-2.5 font-bold uppercase tracking-widest text-[10px] sticky left-0" style={{ color: '#444', backgroundColor: '#0a0a0a', minWidth: 200 }}>
-                  Campanha
-                </th>
-                {activeCols.map(col => (
-                  <th key={col.key} className="text-right px-3 py-2.5 font-bold uppercase tracking-widest text-[10px] whitespace-nowrap" style={{ color: '#444' }}>
-                    {col.label}
-                  </th>
-                ))}
-                <th className="px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest text-right" style={{ color: '#444' }}>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayed.length === 0 && (
-                <tr>
-                  <td colSpan={activeCols.length + 2} className="text-center py-12" style={{ color: '#444' }}>
-                    Nenhuma campanha encontrada para o período
-                  </td>
-                </tr>
-              )}
-              {displayed.map(row => {
-                const isActive = row.status === 'ACTIVE'
-                return (
-                  <tr key={row.id} style={{ borderBottom: '1px solid #0d0d0d' }}
-                    onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0a0a0a')}
-                    onMouseLeave={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    <td className="px-3 py-2.5 sticky left-0" style={{ backgroundColor: 'inherit', minWidth: 200 }}>
-                      <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: isActive ? '#1FCE4A' : '#444' }} />
-                        <div>
-                          <p className="text-white font-medium leading-snug truncate" style={{ maxWidth: 180 }}>{row.name}</p>
-                          <p className="text-[9px] uppercase tracking-wider mt-0.5" style={{ color: isActive ? '#1FCE4A' : '#555' }}>
-                            {isActive ? 'Ativo' : 'Pausado'}
-                          </p>
-                        </div>
-                      </div>
-                    </td>
-                    {activeCols.map(col => (
-                      <td key={col.key} className="px-3 py-2.5 text-right whitespace-nowrap" style={{ color: col.key === 'spend' ? '#fff' : '#aaa' }}>
-                        {fmtVal(row[col.key], col.fmt)}
-                      </td>
-                    ))}
-                    <td className="px-3 py-2.5 text-right">
-                      <button
-                        onClick={() => toggleStatus(row)}
-                        disabled={toggling[row.id]}
-                        title={isActive ? 'Pausar campanha' : 'Ativar campanha'}
-                        className="p-1.5 rounded-lg transition-colors disabled:opacity-50"
-                        style={{ color: isActive ? '#EF4444' : '#1FCE4A', border: `1px solid ${isActive ? '#EF444433' : '#1FCE4A33'}` }}
-                      >
-                        {toggling[row.id] ? <Loader2 size={11} className="animate-spin" /> : isActive ? <Pause size={11} /> : <Play size={11} />}
-                      </button>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-            {displayed.length > 1 && (
-              <tfoot>
-                <tr style={{ borderTop: '1px solid #1a1a1a', backgroundColor: '#080808' }}>
-                  <td className="px-3 py-2.5 text-xs font-bold sticky left-0" style={{ color: '#555', backgroundColor: '#080808' }}>
-                    Total ({displayed.length} campanhas)
-                  </td>
-                  {activeCols.map(col => (
-                    <td key={col.key} className="px-3 py-2.5 text-right text-xs font-bold whitespace-nowrap" style={{ color: '#fff' }}>
-                      {fmtVal(totals[col.key] ?? 0, col.fmt)}
-                    </td>
-                  ))}
-                  <td />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-      )}
+      {/* ── KPI Grid ── */}
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))' }}>
+        {KPI_DEFS.map(def => (
+          <KpiCard
+            key={def.key}
+            def={def}
+            value={metrics ? metrics[def.key] : 0}
+            hidden={hiddenMetrics.has(def.key)}
+            onToggle={() => toggleMetric(def.key)}
+          />
+        ))}
+      </div>
 
-      <p className="text-[10px]" style={{ color: '#333' }}>
-        Dados via Meta Graph API · Conta {accountId}
+      {/* ── Performance Chart ── */}
+      <PerformanceChart data={dailyData} loading={loadingChart} onLoad={loadChart} />
+
+      {/* ── Campaign Table ── */}
+      <CampaignTableSection
+        rows={campaigns}
+        loading={loadingMain}
+        onToggle={toggleStatus}
+        toggling={toggling}
+        period={periodIdx}
+        onPeriodChange={(i) => { setPeriodIdx(i); setDailyData([]) }}
+      />
+
+      {/* ── PDF de Campanhas ── */}
+      <div className="rounded-xl p-4" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+        <div className="font-semibold text-white text-sm mb-2">PDF de Campanhas</div>
+        <p className="text-[11px] leading-relaxed mb-3" style={{ color: '#6b7a8d' }}>
+          Personalize as métricas que deseja exportar das campanhas diretamente na tabela acima. Reorganize as métricas, filtre pela ordem desejada, oculte campanhas, oculte métricas desnecessárias para a elaboração do relatório na opção "Organizar" e salve essas configurações sempre que necessário, de forma simples e intuitiva.
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-semibold"
+            style={{ backgroundColor: BLUE, color: '#fff' }}
+          >
+            <Download size={11} /> Baixar PDF de campanhas
+          </button>
+          <button
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-[11px] font-medium"
+            style={{ border: `1px solid ${BORDER}`, color: '#6b7a8d' }}
+          >
+            <FileText size={11} /> Abrir como texto
+          </button>
+        </div>
+      </div>
+
+      {/* ── Melhores Anúncios ── */}
+      <div className="rounded-xl p-4" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-semibold text-white text-sm">Melhores Anúncios</span>
+          <span className="text-[11px]" style={{ color: '#6b7a8d' }}>{fmtBR(until)}</span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-8 gap-4">
+          <TrendingUp size={28} style={{ color: '#2a3040' }} />
+          <p className="text-sm" style={{ color: '#555' }}>Clique para carregar e analisar todos os anúncios</p>
+          <button
+            className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold"
+            style={{ backgroundColor: BLUE, color: '#fff' }}
+          >
+            Carregar anúncios
+          </button>
+        </div>
+      </div>
+
+      {/* ── Funil de Conversão ── */}
+      <ConversionFunnel metrics={metrics} />
+
+      {/* ── Dados Demográficos ── */}
+      <div className="rounded-xl p-4" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+        <div className="font-semibold text-white text-sm mb-4">Dados Demográficos</div>
+        <div className="flex flex-col items-center justify-center py-8 gap-4">
+          <Users size={28} style={{ color: '#2a3040' }} />
+          <p className="text-sm text-center" style={{ color: '#555' }}>
+            Clique para buscar a distribuição por idade e gênero da conta no período selecionado
+          </p>
+          <button
+            className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold"
+            style={{ backgroundColor: BLUE, color: '#fff' }}
+          >
+            Carregar dados demográficos
+          </button>
+        </div>
+      </div>
+
+      {/* ── Meta de Investimento ── */}
+      <div className="rounded-xl p-4" style={{ backgroundColor: CARD_BG, border: `1px solid ${BORDER}` }}>
+        <div className="flex items-center justify-between mb-4">
+          <span className="font-semibold text-white text-sm">Meta de Investimento</span>
+          <span className="text-[11px]" style={{ color: '#6b7a8d' }}>
+            {new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 mb-4">
+          <span className="text-[11px] px-3 py-1.5 rounded-lg" style={{ border: `1px solid ${BORDER}`, color: '#6b7a8d' }}>Nível de Conta</span>
+        </div>
+        <div className="flex flex-col items-center justify-center py-8 gap-3">
+          <Target size={28} style={{ color: '#2a3040' }} />
+          <p className="text-sm" style={{ color: '#555' }}>Selecione um item acima para visualizar ou definir metas</p>
+        </div>
+      </div>
+
+      {/* ── Bottom Actions ── */}
+      <div className="flex items-center gap-2 justify-end flex-wrap pb-2">
+        <button
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium"
+          style={{ border: `1px solid ${BORDER}`, color: '#6b7a8d' }}
+        >
+          <Settings size={11} /> Organizar seções
+        </button>
+        <button
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-medium"
+          style={{ border: `1px solid ${BORDER}`, color: '#6b7a8d' }}
+        >
+          <Wallet size={11} /> Verificar Saldo
+        </button>
+        <button
+          className="flex items-center gap-2 px-4 py-2 rounded-lg text-[11px] font-semibold"
+          style={{ backgroundColor: BLUE, color: '#fff' }}
+        >
+          <FileText size={11} /> PDF Avançado
+        </button>
+      </div>
+
+      <p className="text-[10px] text-right pb-2" style={{ color: '#2a3040' }}>
+        Meta Graph API v18.0 · {accountId}
       </p>
     </div>
   )
