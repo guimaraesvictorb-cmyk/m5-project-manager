@@ -16,15 +16,20 @@ interface AuthState {
 const AuthContext = createContext<AuthState | null>(null)
 
 async function fetchProfile(userId: string): Promise<Profile | null> {
-  try {
-    const { data } = await Promise.race([
-      supabase.from('profiles').select('*').eq('id', userId).single(),
-      new Promise<{ data: null }>((resolve) => setTimeout(() => resolve({ data: null }), 5000)),
-    ])
-    return data
-  } catch {
-    return null
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle()
+      if (data) return data
+      if (error) await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+    } catch {
+      await new Promise((r) => setTimeout(r, 800 * (attempt + 1)))
+    }
   }
+  return null
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {

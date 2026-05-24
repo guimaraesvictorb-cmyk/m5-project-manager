@@ -295,7 +295,7 @@ interface ClientesSectionProps {
 
 export function ClientesSection({ compact = false, onSelectClient }: ClientesSectionProps) {
   const { clients, loading, createClient, updateHealthFlag } = useClients();
-  const { profile } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const [search, setSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
   const [filterFlag, setFilterFlag] = useState("todos");
@@ -314,9 +314,9 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
   const selectCls = "bg-[#0d0d0d] border border-[#1e1e1e] rounded-lg px-3 py-2 text-xs text-white focus:outline-none transition-colors appearance-none cursor-pointer";
 
   async function handleCreate(data: Partial<Client>): Promise<string | undefined> {
-    if (!profile) return "Usuário não autenticado";
+    if (!user) return "Usuário não autenticado";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await createClient({ ...data, created_by: profile.id } as any);
+    const result = await createClient({ ...data, created_by: user.id } as any);
     return result?.error;
   }
 
@@ -341,7 +341,7 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
               {ativos} ativos · {emRisco} em risco
             </p>
           </div>
-          {profile?.role === "admin" || profile?.role === "coordenador" ? (
+          {isAuthenticated && (
             <button
               onClick={() => setShowNewModal(true)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold transition-all duration-150"
@@ -352,7 +352,7 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
               <Plus size={13} />
               Novo Cliente
             </button>
-          ) : null}
+          )}
         </div>
       )}
 
@@ -388,7 +388,7 @@ export function ClientesSection({ compact = false, onSelectClient }: ClientesSec
           <p className="text-xs mb-4" style={{ color: "#444" }}>
             {clients.length === 0 ? "Adicione o primeiro cliente da M5" : "Tente ajustar os filtros"}
           </p>
-          {clients.length === 0 && (profile?.role === "admin" || profile?.role === "coordenador") && (
+          {clients.length === 0 && isAuthenticated && (
             <button
               onClick={() => setShowNewModal(true)}
               className="text-xs font-semibold px-4 py-2 rounded-lg"
