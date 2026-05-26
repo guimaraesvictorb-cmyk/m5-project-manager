@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Phone, Mail, ChevronDown, X, ExternalLink, Calendar } from "lucide-react";
 import { usePipeline } from "../hooks/usePipeline";
 import { useAuth } from "../hooks/useAuth";
