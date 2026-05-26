@@ -156,6 +156,7 @@ export function TasksView({ clientId }: { clientId?: string }) {
   const [editing, setEditing] = useState<Task | null | "new">(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [filterStatus, setFilterStatus] = useState<Task["status"] | "todos">("todos");
+  const [filterDate, setFilterDate] = useState<"todas" | "hoje" | "semana" | "mes" | "atrasadas">("todas");
 
   useEffect(() => {
     supabase.from("profiles").select("*").eq("is_active", true).then(({ data }) => setProfiles(data ?? []));
@@ -164,6 +165,22 @@ export function TasksView({ clientId }: { clientId?: string }) {
   const filtered = tasks.filter((t) => {
     if (t.parent_task_id) return false;
     if (filterStatus !== "todos" && t.status !== filterStatus) return false;
+    if (filterDate !== "todas") {
+      const now = new Date()
+      const todayStr = now.toDateString()
+      const dl = t.deadline ? new Date(t.deadline + "T00:00:00") : null
+      if (filterDate === "atrasadas") {
+        if (!dl || dl >= new Date(todayStr) || t.status === "concluido" || t.status === "cancelado") return false
+      } else if (filterDate === "hoje") {
+        if (!dl || dl.toDateString() !== todayStr) return false
+      } else if (filterDate === "semana") {
+        const startOfWeek = new Date(now); startOfWeek.setDate(now.getDate() - now.getDay())
+        const endOfWeek = new Date(startOfWeek); endOfWeek.setDate(startOfWeek.getDate() + 6)
+        if (!dl || dl < startOfWeek || dl > endOfWeek) return false
+      } else if (filterDate === "mes") {
+        if (!dl || dl.getMonth() !== now.getMonth() || dl.getFullYear() !== now.getFullYear()) return false
+      }
+    }
     return true;
   });
 
@@ -223,6 +240,23 @@ export function TasksView({ clientId }: { clientId?: string }) {
           <button key={s} onClick={() => setFilterStatus(s as Task["status"] | "todos")}
             className="text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider transition-all"
             style={filterStatus === s ? { color, backgroundColor: bg, border: `1px solid ${color}44` } : { color: "#444", backgroundColor: "transparent", border: "1px solid transparent" }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Date filter chips */}
+      <div className="flex items-center gap-2 flex-wrap">
+        {([
+          ["todas",     "Todas as datas", "#555",    "transparent"],
+          ["hoje",      "Hoje",           "#3B82F6", "#0d1630"],
+          ["semana",    "Esta semana",    "#8B5CF6", "#130d1f"],
+          ["mes",       "Este mês",       "#F59E0B", "#1a1200"],
+          ["atrasadas", "Atrasadas",      "#EF4444", "#1a0505"],
+        ] as [typeof filterDate, string, string, string][]).map(([v, label, color, bg]) => (
+          <button key={v} onClick={() => setFilterDate(v)}
+            className="text-[10px] font-bold px-2 py-1 rounded uppercase tracking-wider transition-all"
+            style={filterDate === v ? { color, backgroundColor: bg, border: `1px solid ${color}44` } : { color: "#333", backgroundColor: "transparent", border: "1px solid transparent" }}>
             {label}
           </button>
         ))}

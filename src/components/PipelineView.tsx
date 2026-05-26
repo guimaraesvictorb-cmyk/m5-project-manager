@@ -205,6 +205,13 @@ function NewLeadModal({
     data_fechamento: "", status_contrato: "",
   });
 
+  useEffect(() => {
+    if (stages.length > 0 && !form.stage_id) {
+      const first = stages.find((s) => !s.is_won && !s.is_lost) ?? stages[0]
+      if (first) setForm((p) => ({ ...p, stage_id: first.id }))
+    }
+  }, [stages]);
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name || !form.stage_id) return;
@@ -303,7 +310,7 @@ function NewLeadModal({
               style={{ borderColor: "#262626" }}
               required
             >
-              {stages.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {stages.filter((s) => !s.is_won && !s.is_lost).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
 
